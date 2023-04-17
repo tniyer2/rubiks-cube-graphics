@@ -21,6 +21,7 @@ window.addEventListener('load', function init() {
     if (!gl) { window.alert("WebGL isn't available"); return; }
 
     // Configure WebGL
+    gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.1, 0.8, 1.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
@@ -31,6 +32,16 @@ window.addEventListener('load', function init() {
 
     initEvents();
     onWindowResize();
+
+    /*
+    gl.uniform3fv(gl.program.uLightAmbient, stringToColor(document.getElementById("light-ambient").value));
+    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor(document.getElementById("light-diffuse").value));
+    gl.uniform3fv(gl.program.uLightSpecular, stringToColor(document.getElementById("light-specular").value));
+    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor(document.getElementById("material-ambient").value));
+    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor(document.getElementById("material-diffuse").value));
+    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor(document.getElementById("light-specular").value));
+    gl.uniform1f(gl.program.uMaterialShininess, +document.getElementById("shininess").value);
+    */
 
     // Start the Game Loop
     runFrame();
@@ -155,6 +166,17 @@ function initProgram() {
     program.uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
     program.uLight = gl.getUniformLocation(program, 'uLight');
     program.uLightIntensity = gl.getUniformLocation(program, 'uLightIntensity');
+
+    /*
+    program.uLightAttenuation = gl.getUniformLocation(program, 'uLightAttenuation');
+    program.uLightAmbient = gl.getUniformLocation(program, 'uLightAmbient');
+    program.uLightDiffuse = gl.getUniformLocation(program, 'uLightDiffuse');
+    program.uLightSpecular = gl.getUniformLocation(program, 'uLightSpecular');
+    program.uMaterialAmbient = gl.getUniformLocation(program, 'uMaterialAmbient');
+    program.uMaterialDiffuse = gl.getUniformLocation(program, 'uMaterialDiffuse');
+    program.uMaterialSpecular = gl.getUniformLocation(program, 'uMaterialSpecular');
+    program.uMaterialShininess = gl.getUniformLocation(program, 'uMaterialShininess');
+    */
 
     return program;
 }
@@ -742,3 +764,32 @@ function getAxisAlignedXZBoundingBox(model, transform) {
 
     return { min: [minX, 0, minZ],  max: [maxX, 0, maxZ] };
 }
+
+/**
+ * Handle the click-and-drag to rotate the cube.
+ */
+/*
+let rotation = [0, 0, 0];
+function onMouseDown(e) {
+    let [startX, startY] = [e.offsetX, e.offsetY];
+    let start_rotation = rotation.slice();
+    function onMouseMove(e2) {
+        let x_rotation = (e2.offsetX - startX)/(this.width - 1) * 360;
+        let y_rotation = (e2.offsetY - startY)/(this.height - 1) * 360;
+        rotation[0] = start_rotation[0] + y_rotation;
+        rotation[1] = start_rotation[1] + x_rotation;
+        let qRotation = glMatrix.quat.fromEuler(glMatrix.quat.create(), ...rotation);
+        let mv = glMatrix.mat4.fromRotationTranslationScale(glMatrix.mat4.create(),
+            qRotation, [0, 0, 0], [0.5, 0.5, 0.5]);
+        gl.uniformMatrix4fv(gl.program.uModelViewMatrix, false, mv);
+    }
+    function onMouseUp() {
+        this.removeEventListener('mousemove', onMouseMove);
+        this.removeEventListener('mouseup', onMouseUp);
+    }
+    if (e.button === 0) {
+        this.addEventListener('mousemove', onMouseMove);
+        this.addEventListener('mouseup', onMouseUp);
+    }
+}
+*/
