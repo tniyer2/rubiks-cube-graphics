@@ -308,8 +308,7 @@ function initEvents() {
 
     const handler = createMouseHandler(
         document.getElementsByTagName('canvas')[0],
-        onMouse,
-        { exitOnLeave: false }
+        onMouse
     );
     handler.attach();
 }
