@@ -33,15 +33,14 @@ window.addEventListener('load', function init() {
     initEvents();
     onWindowResize();
 
-    /*
-    gl.uniform3fv(gl.program.uLightAmbient, stringToColor(document.getElementById("light-ambient").value));
-    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor(document.getElementById("light-diffuse").value));
-    gl.uniform3fv(gl.program.uLightSpecular, stringToColor(document.getElementById("light-specular").value));
-    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor(document.getElementById("material-ambient").value));
-    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor(document.getElementById("material-diffuse").value));
-    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor(document.getElementById("light-specular").value));
-    gl.uniform1f(gl.program.uMaterialShininess, +document.getElementById("shininess").value);
-    */
+    gl.uniform3fv(gl.program.uLightAmbient, stringToColor("#ffffff"));
+    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor("#ffffff"));
+    gl.uniform3fv(gl.program.uLightSpecular, stringToColor("#ffffff"));
+
+    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor("#330000"));
+    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor("#a00000"));
+    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor("#606060"));
+    gl.uniform1f(gl.program.uMaterialShininess, 5);
 
     // Start the Game Loop
     runFrame();
@@ -306,6 +305,9 @@ function initEvents() {
         e.preventDefault();
         gl.input.state[e.key] = false;
     });
+
+    const handler = createMouseHandler(document.getElementsByTagName('canvas')[0], onMouse, {});
+    handler.attach();
 }
 
 /**
@@ -725,8 +727,8 @@ function createQuadTree(model, modelTransform, origin_, size_, maxDepth) {
         return s;
     }
 
-    console.log(root);
-    console.log(nodeToString(root));
+    // console.log(root);
+    // console.log(nodeToString(root));
 
     return root;
 }
@@ -766,30 +768,138 @@ function getAxisAlignedXZBoundingBox(model, transform) {
 }
 
 /**
- * Handle the click-and-drag to rotate the cube.
+ * Implements all of the click and drag functionality.
+ * Returning true in the callback will enable dragging
+ * after a mousedown event.
+ * @param {*} elm the DOM element to click and drag on.
+ * @param {*} callback gets called on every mousedown, mousemove, and mouseup.
+ * @param {*} self an object that gets passed to the callback.
+ * @returns the mouse handler object.
  */
-/*
-let rotation = [0, 0, 0];
-function onMouseDown(e) {
-    let [startX, startY] = [e.offsetX, e.offsetY];
-    let start_rotation = rotation.slice();
-    function onMouseMove(e2) {
-        let x_rotation = (e2.offsetX - startX)/(this.width - 1) * 360;
-        let y_rotation = (e2.offsetY - startY)/(this.height - 1) * 360;
-        rotation[0] = start_rotation[0] + y_rotation;
-        rotation[1] = start_rotation[1] + x_rotation;
-        let qRotation = glMatrix.quat.fromEuler(glMatrix.quat.create(), ...rotation);
-        let mv = glMatrix.mat4.fromRotationTranslationScale(glMatrix.mat4.create(),
-            qRotation, [0, 0, 0], [0.5, 0.5, 0.5]);
-        gl.uniformMatrix4fv(gl.program.uModelViewMatrix, false, mv);
+function createMouseHandler(elm, callback, self) {
+    let inMouseMove = false;
+
+    function onMouseDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // prevents mousedown from being called after mousemove but before mouseup
+        // this can happen if you move cursor while down
+        if (inMouseMove === true) {
+            inMouseMove = false;
+            doOnMouseUp.call(this, e);
+        } else {
+            doOnMouseDown.call(this, e);
+        }
     }
-    function onMouseUp() {
-        this.removeEventListener('mousemove', onMouseMove);
-        this.removeEventListener('mouseup', onMouseUp);
+
+    function doOnMouseUp(e) {
+        inMouseMove = false;
+        
+        elm.removeEventListener('mousemove', onMouseMove);
+        elm.removeEventListener('mouseup', onMouseUp);
+        elm.addEventListener('mousedown', onMouseDown);
+
+        // mouse up
+        callback.call(this, e, "up", self);
     }
-    if (e.button === 0) {
-        this.addEventListener('mousemove', onMouseMove);
-        this.addEventListener('mouseup', onMouseUp);
+
+    function doOnMouseDown(e) {
+        // mouse down
+        const shouldEnterDrag = callback.call(this, e, "down", self);
+
+        if (shouldEnterDrag === true) {
+            elm.removeEventListener('mousedown', onMouseDown)
+            elm.addEventListener('mousemove', onMouseMove);
+            elm.addEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    function onMouseMove(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        inMouseMove = true;
+
+        // mouse move
+        callback.call(this, e, "move", self);
+    }
+
+    function onMouseUp(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        doOnMouseUp.call(this, e);
+    }
+
+    return {
+        attach: () => {
+            elm.addEventListener('mousedown', onMouseDown);
+        },
+        detach: () => {
+            inMouseMove = false;
+
+            elm.removeEventListener('mousedown', onMouseDown);
+            elm.removeEventListener('mousemove', onMouseMove);
+            elm.removeEventListener('mouseup', onMouseUp);
+        },
     }
 }
-*/
+
+/**
+ * Convert x and y from window coordinates (in pixels)
+ * relative to a canvas element to clip coordinates (-1,-1 to 1,1).
+ */
+function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
+    return [
+        (x / (canvasWidth / 2)) - 1,
+        ((-y) / (canvasHeight / 2)) + 1
+    ];
+}
+
+/**
+ * Handle the click-and-drag to rotate the Rubik's cube.
+ */
+function onMouse(e, type, self) {
+    const mousePos = windowToClipSpace(
+        e.offsetX, e.offsetY, this.width, this.height);
+
+    if (type === "down") {
+        const clickedLeftMouseButton = e.button === 0;
+        if (clickedLeftMouseButton) {
+            // Set initials
+            self.startMousePos = mousePos;
+            self.startTransform = gl.cube.transform;
+    
+            // moves tetrahdron to location clicked.
+            // GLB_tetrahedronPosition = vec3.fromValues(mouseX, mouseY, 0);
+
+            return true; // enters drag
+        }
+    } else if (type === "move") {        
+        // Get the amount moved (in clip coordinates)
+        let diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
+
+        // Add difference to tetrahedron's starting position
+        const rot = mat4.multiply(
+            mat4.create(), 
+            angleAxisToMat4(diff[0] * 100, [0, 1, 0]),
+            angleAxisToMat4(diff[1] * 100, [-1, 0, 0])
+        );
+        gl.cube.localTransform = mat4.multiply(
+            mat4.create(), 
+            rot, 
+            self.startTransform
+        );
+    }
+
+    return false; // default don't enter drag
+}
+
+function stringToColor(str) {
+    return Float32Array.of(
+        parseInt(str.substr(1, 2), 16) / 255.0,
+        parseInt(str.substr(3, 2), 16) / 255.0,
+        parseInt(str.substr(5, 2), 16) / 255.0
+    );
+}
