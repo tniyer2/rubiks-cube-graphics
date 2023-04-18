@@ -815,13 +815,11 @@ function createMouseHandler(elm, callback, options) {
         elm.removeEventListener('mouseleave', onMouseLeave);
         elm.addEventListener('mousedown', onMouseDown);
 
-        // mouse up
-        callback.call(this, e, "up", options.self);
+        callback.call(this, e, "exit", options.self);
     }
 
     function enterDrag(e) {
-        // mouse down
-        const shouldEnterDrag = callback.call(this, e, "down", options.self);
+        const shouldEnterDrag = callback.call(this, e, "enter", options.self);
 
         if (shouldEnterDrag === true) {
             enteredDrag = true;
@@ -837,8 +835,7 @@ function createMouseHandler(elm, callback, options) {
         e.preventDefault();
         e.stopPropagation();
 
-        // mouse move
-        callback.call(this, e, "move", options.self);
+        callback.call(this, e, "drag", options.self);
     }
 
     function onMouseUp(e) {
@@ -890,7 +887,7 @@ function onMouse(e, type, self) {
     const mousePos = windowToClipSpace(
         e.offsetX, e.offsetY, this.width, this.height);
 
-    if (type === "down") {
+    if (type === "enter") {
         const clickedLeftMouseButton = e.button === 0;
         if (clickedLeftMouseButton) {
             // Set initials
@@ -899,7 +896,7 @@ function onMouse(e, type, self) {
 
             return true; // enters drag
         }
-    } else if (type === "move") {        
+    } else if (type === "drag") {        
         // Get the amount moved (in clip coordinates)
         let diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
 
