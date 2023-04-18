@@ -288,9 +288,37 @@ function initEvents() {
     // stores which keys are pressed
     gl.input = {
         state: {},
+        listeners: {},
         reset: function () { this.state = {}; },
         isKeyDown: function (key) {
             return this.state[key] === true;
+        },
+        addListener: function (key, listener) {
+            let arr;
+            if (key in this.listeners) {
+                arr = this.listeners[key];
+            } else {
+                arr = [];
+                this.listeners[key] = arr;
+            }
+
+            arr.push(listener);
+
+            let isRemoved = false
+
+            return function removeListener() {
+                if (isRemoved === false) {
+                    isRemoved = true;
+                    arr.splice(arr.indexOf(listener), 1);
+                }
+            };
+        },
+        callListeners: function (key, newValue) {
+            if (key in this.listeners) {
+                for (const listener of this.listeners[key]) {
+                    listener(newValue);
+                }
+            }
         }
     };
 
@@ -301,6 +329,7 @@ function initEvents() {
         e.stopPropagation();
 
         gl.input.state[e.key] = true;
+        gl.input.callListeners(e.key, true);
     });
 
     window.addEventListener('keyup', function (e) {
@@ -308,6 +337,7 @@ function initEvents() {
         e.stopPropagation();
 
         gl.input.state[e.key] = false;
+        gl.input.callListeners(e.key, false);
     });
 
     const handler = createMouseHandler(
@@ -900,44 +930,58 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
 
 const ROTATE_SPEED = 3;
 const Z_ROTATE_SPEED = 3;
+const STEP_SIZE = 20;
+
+const LOCK_AXIS_KEY = "Shift";
+const LOCK_STEP_KEY = "Alt";
+const ROTATE_Z_KEY = "z";
 
 /**
  * Handle the click-and-drag to rotate the Rubik's cube.
  */
 function onMouse(e, type, self) {
-    const mousePos = windowToClipSpace(
+    self.mousePos = windowToClipSpace(
         e.offsetX, e.offsetY, this.width, this.height);
 
-    if (type === "enter") {
-        const clickedLeftMouseButton = e.button === 0;
-        if (clickedLeftMouseButton) {
-            self.startMousePos = mousePos;
-            self.startTransform = gl.cube.transform;
+    function onDrag() {
+        const rotateZ = gl.input.isKeyDown(ROTATE_Z_KEY);
+        const lockAxis = gl.input.isKeyDown(LOCK_AXIS_KEY);
+        const lockStep = gl.input.isKeyDown(LOCK_STEP_KEY);
 
-            self.rotateZ = gl.input.isKeyDown("Shift");
+        const applyStep = (x) => Math.floor(x / STEP_SIZE) * STEP_SIZE;
 
-            const [x, y] = self.startMousePos;
-            self.startAngle = Math.atan2(y, x);
-
-            return true; // enters drag
-        }
-    } else if (type === "drag") {        
         let rot;
-        if (self.rotateZ) {
+        if (rotateZ) {
             // TODO: (Maybe?) center mousePos on screen space cube center.
-            const [x, y] = mousePos;
+            const [x, y] = self.mousePos;
             const curAngle = Math.atan2(y, x);
 
-            const angle = radiansToDegrees((curAngle - self.startAngle) * Z_ROTATE_SPEED);
+            let angle = radiansToDegrees((curAngle - self.startAngle) * Z_ROTATE_SPEED);
+
+            if (lockStep) {
+                angle = applyStep(angle);
+            }
+
             rot = angleAxisToMat4(angle, [0, 0, 1]);
         } else {
-            const diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
+            const diff = vec2.subtract(vec2.create(), self.mousePos, self.startMousePos);
 
-            rot = mat4.multiply(
-                mat4.create(), 
-                angleAxisToMat4(diff[0] * 100 * ROTATE_SPEED, [0, 1, 0]),
-                angleAxisToMat4(diff[1] * 100 * ROTATE_SPEED, [-1, 0, 0])
-            );
+            let angleX = diff[0] * 100 * ROTATE_SPEED;
+            let angleY = diff[1] * 100 * ROTATE_SPEED;
+            
+            if (lockStep) {
+                angleX = applyStep(angleX);
+                angleY = applyStep(angleY);
+            }
+
+            const rotX = angleAxisToMat4(angleX, [0, 1, 0]);
+            const rotY = angleAxisToMat4(angleY, [-1, 0, 0]);
+
+            if (lockAxis) {
+                rot = Math.abs(diff[0]) >= Math.abs(diff[1]) ? rotX : rotY;
+            } else {
+                rot = mat4.multiply(mat4.create(), rotX, rotY);
+            }
         }
 
         gl.cube.localTransform = mat4.multiply(
@@ -945,6 +989,29 @@ function onMouse(e, type, self) {
             rot, 
             self.startTransform
         );
+    }
+
+    if (type === "enter") {
+        const clickedLeftMouseButton = e.button === 0;
+        if (clickedLeftMouseButton) {
+            self.startMousePos = self.mousePos;
+            self.startTransform = gl.cube.transform;
+
+            const [x, y] = self.startMousePos;
+            self.startAngle = Math.atan2(y, x);
+            
+            self.removes = [
+                gl.input.addListener(ROTATE_Z_KEY, onDrag),
+                gl.input.addListener(LOCK_AXIS_KEY, onDrag),
+                gl.input.addListener(LOCK_STEP_KEY, onDrag)
+            ];
+
+            return true; // enters drag
+        }
+    } else if (type === "drag") {
+        onDrag();
+    } else if (type === "exit") {
+        self.removes.forEach(r => r());
     }
 
     return false;
