@@ -306,7 +306,11 @@ function initEvents() {
         gl.input.state[e.key] = false;
     });
 
-    const handler = createMouseHandler(document.getElementsByTagName('canvas')[0], onMouse, {});
+    const handler = createMouseHandler(
+        document.getElementsByTagName('canvas')[0],
+        onMouse,
+        { exitOnLeave: false }
+    );
     handler.attach();
 }
 
@@ -773,63 +777,85 @@ function getAxisAlignedXZBoundingBox(model, transform) {
  * after a mousedown event.
  * @param {*} elm the DOM element to click and drag on.
  * @param {*} callback gets called on every mousedown, mousemove, and mouseup.
- * @param {*} self an object that gets passed to the callback.
+ * @param {*} options.self an object that gets passed to the callback.
+ * @param {*} options.exitOnLeave should exit drag on 'onmouseleave'.
  * @returns the mouse handler object.
  */
-function createMouseHandler(elm, callback, self) {
-    let inMouseMove = false;
+function createMouseHandler(elm, callback, options) {
+    if (typeof options === "undefined" || options == null) {
+        options = {};
+    } else if (typeof options !== "object") {
+        throw new Error("Invalid argument.")
+    }
+    {
+        const defaults = { self: {}, exitOnLeave: true };
+        options = Object.assign(defaults, options);
+    }
+
+    let enteredDrag = false;
 
     function onMouseDown(e) {
         e.preventDefault();
         e.stopPropagation();
 
         // prevents mousedown from being called after mousemove but before mouseup
-        // this can happen if you move cursor while down
-        if (inMouseMove === true) {
-            inMouseMove = false;
-            doOnMouseUp.call(this, e);
+        // this can happen if you move cursor outside of element while drag is in action.
+        if (enteredDrag === true) {
+            enteredDrag = false;
+            exitDrag.call(this, e);
         } else {
-            doOnMouseDown.call(this, e);
+            enterDrag.call(this, e);
         }
     }
 
-    function doOnMouseUp(e) {
-        inMouseMove = false;
+    function exitDrag(e) {
+        enteredDrag = false;
         
         elm.removeEventListener('mousemove', onMouseMove);
         elm.removeEventListener('mouseup', onMouseUp);
+        elm.removeEventListener('mouseleave', onMouseLeave);
         elm.addEventListener('mousedown', onMouseDown);
 
         // mouse up
-        callback.call(this, e, "up", self);
+        callback.call(this, e, "up", options.self);
     }
 
-    function doOnMouseDown(e) {
+    function enterDrag(e) {
         // mouse down
-        const shouldEnterDrag = callback.call(this, e, "down", self);
+        const shouldEnterDrag = callback.call(this, e, "down", options.self);
 
         if (shouldEnterDrag === true) {
+            enteredDrag = true;
+
             elm.removeEventListener('mousedown', onMouseDown)
             elm.addEventListener('mousemove', onMouseMove);
             elm.addEventListener('mouseup', onMouseUp);
+            elm.addEventListener('mouseleave', onMouseLeave);
         }
     }
 
     function onMouseMove(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        inMouseMove = true;
 
         // mouse move
-        callback.call(this, e, "move", self);
+        callback.call(this, e, "move", options.self);
     }
 
     function onMouseUp(e) {
         e.preventDefault();
         e.stopPropagation();
 
-        doOnMouseUp.call(this, e);
+        exitDrag.call(this, e);
+    }
+
+    function onMouseLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (options.exitOnLeave) {
+            exitDrag.call(this, e);
+        }
     }
 
     return {
@@ -837,11 +863,12 @@ function createMouseHandler(elm, callback, self) {
             elm.addEventListener('mousedown', onMouseDown);
         },
         detach: () => {
-            inMouseMove = false;
+            enteredDrag = false;
 
             elm.removeEventListener('mousedown', onMouseDown);
             elm.removeEventListener('mousemove', onMouseMove);
             elm.removeEventListener('mouseup', onMouseUp);
+            elm.removeEventListener('mouseleave', onMouseLeave);
         },
     }
 }
@@ -870,9 +897,6 @@ function onMouse(e, type, self) {
             // Set initials
             self.startMousePos = mousePos;
             self.startTransform = gl.cube.transform;
-    
-            // moves tetrahdron to location clicked.
-            // GLB_tetrahedronPosition = vec3.fromValues(mouseX, mouseY, 0);
 
             return true; // enters drag
         }
@@ -893,7 +917,7 @@ function onMouse(e, type, self) {
         );
     }
 
-    return false; // default don't enter drag
+    return false;
 }
 
 function stringToColor(str) {
