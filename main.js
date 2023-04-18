@@ -880,6 +880,8 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
     ];
 }
 
+const ROTATE_SPEED = 3;
+
 /**
  * Handle the click-and-drag to rotate the Rubik's cube.
  */
@@ -901,10 +903,11 @@ function onMouse(e, type, self) {
         let diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
 
         // Add difference to tetrahedron's starting position
+        const speed = 100 * ROTATE_SPEED;
         const rot = mat4.multiply(
             mat4.create(), 
-            angleAxisToMat4(diff[0] * 100, [0, 1, 0]),
-            angleAxisToMat4(diff[1] * 100, [-1, 0, 0])
+            angleAxisToMat4(diff[0] * speed, [0, 1, 0]),
+            angleAxisToMat4(diff[1] * speed, [-1, 0, 0])
         );
         gl.cube.localTransform = mat4.multiply(
             mat4.create(), 
