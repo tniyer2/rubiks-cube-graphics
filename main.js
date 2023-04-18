@@ -298,11 +298,15 @@ function initEvents() {
 
     window.addEventListener('keydown', function (e) {
         e.preventDefault();
+        e.stopPropagation();
+
         gl.input.state[e.key] = true;
     });
 
     window.addEventListener('keyup', function (e) {
         e.preventDefault();
+        e.stopPropagation();
+
         gl.input.state[e.key] = false;
     });
 
@@ -778,6 +782,7 @@ function getAxisAlignedXZBoundingBox(model, transform) {
  * @param {*} callback gets called on every mousedown, mousemove, and mouseup.
  * @param {*} options.self an object that gets passed to the callback.
  * @param {*} options.exitOnLeave should exit drag on 'onmouseleave'.
+ * @param {*} options.callDragOnEnter should exit drag on 'onmouseleave'.
  * @returns the mouse handler object.
  */
 function createMouseHandler(elm, callback, options) {
@@ -787,7 +792,11 @@ function createMouseHandler(elm, callback, options) {
         throw new Error("Invalid argument.")
     }
     {
-        const defaults = { self: {}, exitOnLeave: true };
+        const defaults = {
+            self: {},
+            callDragOnEnter: true,
+            exitOnLeave: true
+        };
         options = Object.assign(defaults, options);
     }
 
@@ -828,6 +837,10 @@ function createMouseHandler(elm, callback, options) {
             elm.addEventListener('mousemove', onMouseMove);
             elm.addEventListener('mouseup', onMouseUp);
             elm.addEventListener('mouseleave', onMouseLeave);
+
+            if (options.callDragOnEnter) {
+                callback.call(this, e, "drag", options.self);
+            }
         }
     }
 
@@ -896,19 +909,31 @@ function onMouse(e, type, self) {
             self.startMousePos = mousePos;
             self.startTransform = gl.cube.transform;
 
+            self.rotateZ = gl.input.isKeyDown("Shift");
+
             return true; // enters drag
         }
     } else if (type === "drag") {        
-        // Get the amount moved (in clip coordinates)
-        let diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
-
-        // Add difference to tetrahedron's starting position
         const speed = 100 * ROTATE_SPEED;
-        const rot = mat4.multiply(
-            mat4.create(), 
-            angleAxisToMat4(diff[0] * speed, [0, 1, 0]),
-            angleAxisToMat4(diff[1] * speed, [-1, 0, 0])
-        );
+
+        let rot;
+        if (self.rotateZ) {
+            let [x, y] = self.startMousePos;
+            const startAngle = Math.atan2(y, x);
+            [x, y] = mousePos;
+            const curAngle = Math.atan2(y, x);
+
+            rot = angleAxisToMat4((curAngle - startAngle) * 180, [0, 0, 1]);
+        } else {
+            const diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
+
+            rot = mat4.multiply(
+                mat4.create(), 
+                angleAxisToMat4(diff[0] * speed, [0, 1, 0]),
+                angleAxisToMat4(diff[1] * speed, [-1, 0, 0])
+            );
+        }
+
         gl.cube.localTransform = mat4.multiply(
             mat4.create(), 
             rot, 
