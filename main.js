@@ -529,6 +529,11 @@ function degreesToRadians(angle) {
     return (angle / 360) * (2 * Math.PI);
 }
 
+// Converts an angle in radians to degrees.
+function radiansToDegrees(angle) {
+    return (angle * 360) / (2 * Math.PI);
+}
+
 // scales a mat4 by a constant.
 function scaleByConstant(matrix, value) {
     const scaling = mat4.fromScaling(
@@ -894,6 +899,7 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
 }
 
 const ROTATE_SPEED = 3;
+const Z_ROTATE_SPEED = 3;
 
 /**
  * Handle the click-and-drag to rotate the Rubik's cube.
@@ -905,32 +911,32 @@ function onMouse(e, type, self) {
     if (type === "enter") {
         const clickedLeftMouseButton = e.button === 0;
         if (clickedLeftMouseButton) {
-            // Set initials
             self.startMousePos = mousePos;
             self.startTransform = gl.cube.transform;
 
             self.rotateZ = gl.input.isKeyDown("Shift");
 
+            const [x, y] = self.startMousePos;
+            self.startAngle = Math.atan2(y, x);
+
             return true; // enters drag
         }
     } else if (type === "drag") {        
-        const speed = 100 * ROTATE_SPEED;
-
         let rot;
         if (self.rotateZ) {
-            let [x, y] = self.startMousePos;
-            const startAngle = Math.atan2(y, x);
-            [x, y] = mousePos;
+            // TODO: (Maybe?) center mousePos on screen space cube center.
+            const [x, y] = mousePos;
             const curAngle = Math.atan2(y, x);
 
-            rot = angleAxisToMat4((curAngle - startAngle) * 180, [0, 0, 1]);
+            const angle = radiansToDegrees((curAngle - self.startAngle) * Z_ROTATE_SPEED);
+            rot = angleAxisToMat4(angle, [0, 0, 1]);
         } else {
             const diff = vec2.subtract(mousePos, mousePos, self.startMousePos);
 
             rot = mat4.multiply(
                 mat4.create(), 
-                angleAxisToMat4(diff[0] * speed, [0, 1, 0]),
-                angleAxisToMat4(diff[1] * speed, [-1, 0, 0])
+                angleAxisToMat4(diff[0] * 100 * ROTATE_SPEED, [0, 1, 0]),
+                angleAxisToMat4(diff[1] * 100 * ROTATE_SPEED, [-1, 0, 0])
             );
         }
 
