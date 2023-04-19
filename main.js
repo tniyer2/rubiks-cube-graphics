@@ -328,7 +328,6 @@ function initEvents() {
         e.preventDefault();
         e.stopPropagation();
 
-        console.log(e.key);
         if (e.repeat === false) {
             gl.input.state[e.key] = true;
             gl.input.callListeners(e.key, true);
@@ -339,7 +338,6 @@ function initEvents() {
         e.preventDefault();
         e.stopPropagation();
 
-        console.log("up: " + e.key);
         gl.input.state[e.key] = false;
         gl.input.callListeners(e.key, false);
     });
