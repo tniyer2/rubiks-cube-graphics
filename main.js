@@ -328,14 +328,18 @@ function initEvents() {
         e.preventDefault();
         e.stopPropagation();
 
-        gl.input.state[e.key] = true;
-        gl.input.callListeners(e.key, true);
+        console.log(e.key);
+        if (e.repeat === false) {
+            gl.input.state[e.key] = true;
+            gl.input.callListeners(e.key, true);
+        }
     });
 
     window.addEventListener('keyup', function (e) {
         e.preventDefault();
         e.stopPropagation();
 
+        console.log("up: " + e.key);
         gl.input.state[e.key] = false;
         gl.input.callListeners(e.key, false);
     });
@@ -504,6 +508,18 @@ function loadModel(coords, colors, indices, useStrips) {
     const object = { vao, count, mode, coords };
 
     return object;
+}
+
+function loadModelFromFile(filename) {
+    return fetch(filename)
+        .then((r) => r.json())
+        .then((json) => {
+            const coords = json["vertices"];
+            const colors = json["colors"];
+            const indices = json["indices"];
+
+            return loadModel(coords, colors, indices, false);
+        });
 }
 
 /**
@@ -928,22 +944,19 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
     ];
 }
 
-const ROTATE_SPEED = 3;
-const Z_ROTATE_SPEED = 3;
-const STEP_SIZE = 20;
-
+const ROTATE_Z_KEY = "Meta";
 const LOCK_AXIS_KEY = "Shift";
 const LOCK_STEP_KEY = "Alt";
-const ROTATE_Z_KEY = "z";
+
+const XY_ROTATE_SPEED = 3;
+const Z_ROTATE_SPEED = 3;
+const STEP_SIZE = 20;
 
 /**
  * Handle the click-and-drag to rotate the Rubik's cube.
  */
 function onMouse(e, type, self) {
-    self.mousePos = windowToClipSpace(
-        e.offsetX, e.offsetY, this.width, this.height);
-
-    function onDrag() {
+    function updateTransform() {
         const rotateZ = gl.input.isKeyDown(ROTATE_Z_KEY);
         const lockAxis = gl.input.isKeyDown(LOCK_AXIS_KEY);
         const lockStep = gl.input.isKeyDown(LOCK_STEP_KEY);
@@ -966,8 +979,8 @@ function onMouse(e, type, self) {
         } else {
             const diff = vec2.subtract(vec2.create(), self.mousePos, self.startMousePos);
 
-            let angleX = diff[0] * 100 * ROTATE_SPEED;
-            let angleY = diff[1] * 100 * ROTATE_SPEED;
+            let angleX = diff[0] * 100 * XY_ROTATE_SPEED;
+            let angleY = diff[1] * 100 * XY_ROTATE_SPEED;
             
             if (lockStep) {
                 angleX = applyStep(angleX);
@@ -991,6 +1004,9 @@ function onMouse(e, type, self) {
         );
     }
 
+    self.mousePos = windowToClipSpace(
+        e.offsetX, e.offsetY, this.width, this.height);
+
     if (type === "enter") {
         const clickedLeftMouseButton = e.button === 0;
         if (clickedLeftMouseButton) {
@@ -1001,15 +1017,15 @@ function onMouse(e, type, self) {
             self.startAngle = Math.atan2(y, x);
             
             self.removes = [
-                gl.input.addListener(ROTATE_Z_KEY, onDrag),
-                gl.input.addListener(LOCK_AXIS_KEY, onDrag),
-                gl.input.addListener(LOCK_STEP_KEY, onDrag)
+                gl.input.addListener(ROTATE_Z_KEY, updateTransform),
+                gl.input.addListener(LOCK_AXIS_KEY, updateTransform),
+                gl.input.addListener(LOCK_STEP_KEY, updateTransform)
             ];
 
             return true; // enters drag
         }
     } else if (type === "drag") {
-        onDrag();
+        updateTransform();
     } else if (type === "exit") {
         self.removes.forEach(r => r());
     }
