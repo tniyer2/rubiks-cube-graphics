@@ -497,34 +497,67 @@ function render() {
 }
 
 function updateRubiksCubeTransform() {
-    let cube = glMatrix.mat4.create();
-    
     /*
-    for (let u = 0; u < 3; u++) {
-        for (let v = 0; v < 3; v++) {
-            const [axisStuckOn, x, y, z] = mapIndices("right", u, v);
+    // let cube = glMatrix.mat4.create();
+    const centerCube = ...;
 
-            const index = (x * 9) + (y * 3) + z;
-            const cublet = gl.cube.children[index];
+    // Define positions of little cubes relative to center of Rubik's cube
+    const positions = [
+        [-1, 1, -1], [0, 1, -1], [1, 1, -1],
+        [-1, 0, -1], [0, 0, -1], [1, 0, -1],
+        [-1, -1, -1], [0, -1, -1], [1, -1, -1],
 
-            angleAxisToMat4(90, axisStuckOn);
+        [-1, 1, 0], [0, 1, 0], [1, 1, 0],
+        [-1, 0, 0], [0, 0, 0], [1, 0, 0],
+        [-1, -1, 0], [0, -1, 0], [1, -1, 0],
+
+        [-1, 1, 1], [0, 1, 1], [1, 1, 1],
+        [-1, 0, 1], [0, 0, 1], [1, 0, 1],
+        [-1, -1, 1], [0, -1, 1], [1, -1, 1],
+    ];
+
+    // Check if the user pressed the "r" key
+    if (gl.input.isKeyDown("r")) {
+        // Rotate the right column of the Rubik's cube
+        const centerCube = cubeState[0]; // get the transform of the center cube
+        for (let i = 0; i < centerCube.children.length; i++) {
+        const cublet = centerCube.children[i];
+        if (cublet.position.x > 0.3 && cublet.position.x < 0.5) { // check if the cublet belongs to the right column
+            cublet.position.z = 0.5 - cublet.position.x; // align the cublet with the vertical axis passing through the center cube
+            cublet.position.x = 0.5;
+            cublet.rotateY(Math.PI/2); // rotate the cublet around that vertical axis by 90 degrees
+            cublet.position.x = cublet.position.z + 0.5; // move the cublet back to its original position
+            cublet.position.z = 0;
         }
     }
-    */
 
     // rotate the right row of a rubik's cube
-    if (false && gl.input.isKeyDown("r")) {
-        const angle = glMatrix.glMatrix.toRadian(45); // rotation angle in radians
-        const axis = [0, 0, -1]; // rotation axis (Z-axis)
-        const translation = [1, 0, 0]; // translation vector
     
-        // Apply the rotation and translation to the cube matrix
-        glMatrix.mat4.translate(cube, cube, translation);
-        glMatrix.mat4.rotate(cube, cube, angle, axis);
-        glMatrix.mat4.translate(cube, cube, [-translation[0], -translation[1], -translation[2]]);
+    
+    // for (let u = 0; u < 3; u++) {
+    //     for (let v = 0; v < 3; v++) {
+    //         // const [axisStuckOn, x, y, z] = mapIndices("right", u, v);
 
-        gl.cube.localTransform = cube;
-    }
+    //         const index = (x * 9) + (y * 3) + z;
+    //         const cublet = gl.cube.children[index];
+
+    //         // angleAxisToMat4(90, axisStuckOn);
+
+    //         if (gl.input.isKeyDown("r")) {
+    //             const angle = glMatrix.glMatrix.toRadian(90); // rotation angle in radians
+    //             const axis = [0, 0, -1]; // rotation axis (Z-axis)
+    //             const translation = [1, 0, 0]; // translation vector
+            
+    //             // Apply the rotation and translation to the cube matrix
+    //             glMatrix.mat4.translate(cublet[13], cublet[13], translation);
+    //             glMatrix.mat4.rotate(cublet[13], cublet[13], angle, axis);
+    //             glMatrix.mat4.translate(cublet[13], cublet[13], [-translation[0], -translation[1], -translation[2]]);
+        
+    //             //gl.cube.localTransform = cube;
+    //         }
+    //     }
+    // }
+
 }
 
 // rotate a whole 
@@ -532,35 +565,8 @@ function updateRubiksCubeTransform() {
 //     const t = gl.cube.localTransform;
 //     mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
 // }
-
-//const rotations = [];
-
-// // yaw (rotate y-axis)
-// if (gl.input.isKeyDown("ArrowLeft") !== gl.input.isKeyDown("ArrowRight")) {
-//     const factor = gl.input.isKeyDown("ArrowRight") ? 1 : -1;
-//     rotations.push(angleAxisToQuat(1 * factor, [0, 1, 0]));
-// }
-
-// // pitch (rotate x-axis)
-// if (gl.input.isKeyDown("w") !== gl.input.isKeyDown("s")) {
-//     const factor = gl.input.isKeyDown("s") ? 1 : -1;
-//     rotations.push(angleAxisToQuat(1 * factor, [1, 0, 0]));
-// }
-
-// // roll (rotate z-axis)
-// if (gl.input.isKeyDown("a") !== gl.input.isKeyDown("d")) {
-//     const factor = gl.input.isKeyDown("d") ? 1 : -1;
-//     rotations.push(angleAxisToQuat(1 * factor, [0, 0, 1]));
-// }
-
-// let finalRotation = rotations.reduce((a, b) => quat.multiply(a, a, b),
-//     quat.identity(quat.create()));
-// finalRotation = mat4.fromQuat(mat4.create(), finalRotation);
-
-// mat4.multiply(delta, delta, finalRotation);
-
-// const t = gl.drone.localTransform;
-// mat4.multiply(t, t, delta);
+*/
+}
 
 /**
  * Converts degrees to radians.
@@ -688,33 +694,74 @@ function parseWavefrontOBJ(text) {
     const vertexPositions = [];
     const vertexNormals = [];
     const vertexUVs = [];
-    const indices = [];
+    const vertexMappings = [];
+    const indices = []; // relative to vertex mappings
 
     const tokensToNumbers = tokens => tokens.map(t => Number(t));
+    const pushAllNums = (arr, nums) => {
+        for (let i = 0; i < nums.length; ++i) {
+            arr.push(nums[i]);
+        }
+    };
 
     lines.forEach((tokens) => {
         const firstToken = tokens.shift();
 
         if (firstToken === "v") {
+            if (tokens.length !== 3) {
+                throw new Error("Invalid length.");
+            }
 
+            const nums = tokensToNumbers(tokens);
+            pushAllNums(vertexPositions, nums);
         } else if (firstToken === "vt") {
+            if (tokens.length !== 2) {
+                throw new Error("Invalid length.");
+            }
 
+            const nums = tokensToNumbers(tokens);
+            pushAllNums(vertexUVs, nums);
         } else if (firstToken === "vn") {
-
+            if (tokens.length !== 3) {
+                throw new Error("Invalid length.");
+            }
+            
+            const nums = tokensToNumbers(tokens);
+            pushAllNums(vertexNormals, nums);
         } else if (firstToken === "f") {
+            if (tokens.length !== 3) {
+                throw new Error("Invalid length.");
+            }
+            
+            for (let i = 0; i < tokens.length; ++i) {
+                const token = tokens[i];
 
+                let index = vertexMappings.indexOf(token);
+                if (index === -1) {
+                    vertexMappings.push(token);
+                    index = vertexMappings.length - 1;
+                }
+
+                indices.push(index);
+            }
         } else if (firstToken === "mtllib") {
-
+            // TODO
         } else if (firstToken === "usemtl") {
-
+            // TODO
         } else if (firstToken === "o") {
-            // pass
+            // TODO
         } else if (firstToken === "s") {
-            // pass
+            // TODO
         } else {
             throw new Error("Invalid token: " + firstToken);
         }
     });
+
+    console.log(vertexPositions);
+    console.log(vertexNormals);
+    console.log(vertexUVs);
+    console.log(vertexMappings);
+    console.log(indices);
 }
 
 function filterEmptyStrings(arr) {
