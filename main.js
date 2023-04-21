@@ -237,6 +237,17 @@ function initBuffers() {
         mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
     }
 
+    gl.rubiksCube = createSceneTreeNode("empty")
+    gl.world.addChild(gl.rubiksCube)
+
+    // TODO: create all smaller cubes
+    const cubes = [];
+
+    for (const cube of cubes) {
+        gl.world.rubiksCube.addChild(cube);
+    }
+
+    // get rid of cube later
     gl.world.addChild(gl.cube);
 
     gl.world.addChild(camera);
@@ -511,6 +522,40 @@ function render() {
 }
 
 function updateRubiksCubeTransform() {
+    let cube = glMatrix.mat4.create();
+    // rotate the right row
+    if (gl.input.isKeyDown("r") !== gl.input.isKeyDown("ArrowDown")) {
+        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on y axis")
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    // rotate the middle row
+    if (gl.input.isKeyDown("m") !== gl.input.isKeyDown("ArrowDown")) {
+        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on y axis")
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    // rotate the left row
+    if (gl.input.isKeyDown("l") !== gl.input.isKeyDown("ArrowDown")) {
+        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on y axis")
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    // rotate the front column
+    if (gl.input.isKeyDown("f") !== gl.input.isKeyDown("ArrowDown")) {
+        const t = glMatrix.mat4.rotateX(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on x axis")
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    // rotate the upper 
+    if (gl.input.isKeyDown("u") !== gl.input.isKeyDown("ArrowDown")) {
+        const t = glMatrix.mat4.rotateZ(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on z axis")
+        mat4.multiply(cube, cube, t);
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+
+
     /*
     // updated is in local space
     const delta = mat4.identity(mat4.create());
@@ -555,6 +600,28 @@ function updateRubiksCubeTransform() {
     */
 }
 
+/**
+ * Converts degrees to radians.
+ */
+function deg2rad(degrees) {
+    return degrees * Math.PI / 180;
+}
+
+
+function onCubeRotation() {
+    // rotate an entire row or column of the cube
+    let cube = glMatrix.mat4.create();
+
+    // rotate the right row
+    if (gl.input.isKeyDown("r")) {
+        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on y axis")
+        mat4.multiply(cube, cube, t);
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    
+    
+}
 /**
  * Loads a model into GPU with the coordinates, colors, and indices provided.
  */
