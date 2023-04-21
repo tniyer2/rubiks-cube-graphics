@@ -563,6 +563,28 @@ function updateRubiksCubeTransform() {
 // mat4.multiply(t, t, delta);
 
 /**
+ * Converts degrees to radians.
+ */
+function deg2rad(degrees) {
+    return degrees * Math.PI / 180;
+}
+
+
+function onCubeRotation() {
+    // rotate an entire row or column of the cube
+    let cube = glMatrix.mat4.create();
+
+    // rotate the right row
+    if (gl.input.isKeyDown("r")) {
+        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
+        console.log("rotated 45 degrees on y axis")
+        mat4.multiply(cube, cube, t);
+        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    }
+    
+    
+}
+/**
  * Loads a model into GPU with the coordinates, colors, and indices provided.
  */
 function loadModel(coords, colors, indices, useStrips) {
