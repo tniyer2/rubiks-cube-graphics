@@ -11,7 +11,7 @@ const quat = glMatrix.quat;
 // Global WebGL context variable
 let gl;
 
-window.addEventListener('load', function init() {
+window.addEventListener('load', async function init() {
     // Get the HTML5 canvas object from it's ID
     const canvas = document.getElementById('webgl-canvas');
     if (!canvas) { window.alert('Could not find #webgl-canvas'); return; }
@@ -28,7 +28,7 @@ window.addEventListener('load', function init() {
     
     // Initialize the WebGL program and data
     gl.program = initProgram();
-    initBuffers();
+    await initBuffers();
 
     initEvents();
     onWindowResize();
@@ -184,7 +184,10 @@ function initProgram() {
  * Initialize the camera and the data buffers.
  * Also initialize the octree.
  */
-function initBuffers() {
+async function initBuffers() {
+    // ignore this it does nothing
+    await loadModelFromWavefrontOBJ("cube.obj");
+
     gl.world = createSceneTreeNode("world");
 
     // Create the camera
@@ -196,45 +199,28 @@ function initBuffers() {
         mat4.multiply(t, t, translation);
     }
 
-    // Load cube model into GPU
     {
-        const cube_coords = [
-            1, 1, 1, // A
-            -1, 1, 1, // B
-            -1, -1, 1, // C
-            1, -1, 1, // D
-            1, -1, -1, // E
-            -1, -1, -1, // F
-            -1, 1, -1, // G
-            1, 1, -1, // H
-        ];
-
-        const cube_colors = [
-            1, 0, 0, // red
-            1, 1, 0, // yellow
-            0, 1, 0, // green
-            0, 0, 0, // black (color is not actually used)
-            0, 1, 1, // cyan
-            0, 0, 1, // blue
-            0, 0, 0, // black (color is not actually used)
-            1, 0, 1, // purple
-        ];
-
-        const cube_indices = [
-            1, 2, 0, 2, 3, 0,
-            7, 6, 1, 0, 7, 1,
-            1, 6, 2, 6, 5, 2,
-            3, 2, 4, 2, 5, 4,
-            6, 7, 5, 7, 4, 5,
-            0, 3, 7, 3, 4, 7,
-        ];
-
-        gl.cube = createSceneTreeNode("model");
-        gl.cube.model = loadModel(cube_coords, cube_colors, cube_indices);
-        
-        // compute cube's transform
+        gl.cube = createSceneTreeNode("empty");
         const t = gl.cube.localTransform;
         mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
+    }
+
+    // Create smaller cubes
+    {
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    const cublet = createSceneTreeNode("model");
+                    cublet.model = loadCubeModel();
+
+                    const t = cublet.localTransform;
+                    
+                    mat4.multiply(t, t, mat4.fromTranslation(mat4.create(), [x, y, z].map(e => 0.5 * e)));
+                    scaleByConstant(t, 0.2);
+                    gl.cube.addChild(cublet);
+                }
+            }
+        }
     }
 
     gl.world.addChild(gl.cube);
@@ -511,49 +497,70 @@ function render() {
 }
 
 function updateRubiksCubeTransform() {
+    let cube = glMatrix.mat4.create();
+    
     /*
-    // updated is in local space
-    const delta = mat4.identity(mat4.create());
+    for (let u = 0; u < 3; u++) {
+        for (let v = 0; v < 3; v++) {
+            const [axisStuckOn, x, y, z] = mapIndices("right", u, v);
 
-    // !== for booleans does exclusive or
+            const index = (x * 9) + (y * 3) + z;
+            const cublet = gl.cube.children[index];
 
-    // moves forward and backward
-    if (gl.input.isKeyDown("ArrowUp") !== gl.input.isKeyDown("ArrowDown")) {
-        const factor = gl.input.isKeyDown("ArrowUp") ? -1 : 1;
-        const t = mat4.fromTranslation(mat4.create(), [0, 0, 0.2 * factor]);
-        mat4.multiply(delta, delta, t);
+            angleAxisToMat4(90, axisStuckOn);
+        }
     }
-
-    const rotations = [];
-
-    // yaw (rotate y-axis)
-    if (gl.input.isKeyDown("ArrowLeft") !== gl.input.isKeyDown("ArrowRight")) {
-        const factor = gl.input.isKeyDown("ArrowRight") ? 1 : -1;
-        rotations.push(angleAxisToQuat(1 * factor, [0, 1, 0]));
-    }
-
-    // pitch (rotate x-axis)
-    if (gl.input.isKeyDown("w") !== gl.input.isKeyDown("s")) {
-        const factor = gl.input.isKeyDown("s") ? 1 : -1;
-        rotations.push(angleAxisToQuat(1 * factor, [1, 0, 0]));
-    }
-
-    // roll (rotate z-axis)
-    if (gl.input.isKeyDown("a") !== gl.input.isKeyDown("d")) {
-        const factor = gl.input.isKeyDown("d") ? 1 : -1;
-        rotations.push(angleAxisToQuat(1 * factor, [0, 0, 1]));
-    }
-
-    let finalRotation = rotations.reduce((a, b) => quat.multiply(a, a, b),
-        quat.identity(quat.create()));
-    finalRotation = mat4.fromQuat(mat4.create(), finalRotation);
-
-    mat4.multiply(delta, delta, finalRotation);
-
-    const t = gl.drone.localTransform;
-    mat4.multiply(t, t, delta);
     */
+
+    // rotate the right row of a rubik's cube
+    if (false && gl.input.isKeyDown("r")) {
+        const angle = glMatrix.glMatrix.toRadian(45); // rotation angle in radians
+        const axis = [0, 0, -1]; // rotation axis (Z-axis)
+        const translation = [1, 0, 0]; // translation vector
+    
+        // Apply the rotation and translation to the cube matrix
+        glMatrix.mat4.translate(cube, cube, translation);
+        glMatrix.mat4.rotate(cube, cube, angle, axis);
+        glMatrix.mat4.translate(cube, cube, [-translation[0], -translation[1], -translation[2]]);
+
+        gl.cube.localTransform = cube;
+    }
 }
+
+// rotate a whole 
+// if (gl.input.isKeyDown("r")) {
+//     const t = gl.cube.localTransform;
+//     mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
+// }
+
+//const rotations = [];
+
+// // yaw (rotate y-axis)
+// if (gl.input.isKeyDown("ArrowLeft") !== gl.input.isKeyDown("ArrowRight")) {
+//     const factor = gl.input.isKeyDown("ArrowRight") ? 1 : -1;
+//     rotations.push(angleAxisToQuat(1 * factor, [0, 1, 0]));
+// }
+
+// // pitch (rotate x-axis)
+// if (gl.input.isKeyDown("w") !== gl.input.isKeyDown("s")) {
+//     const factor = gl.input.isKeyDown("s") ? 1 : -1;
+//     rotations.push(angleAxisToQuat(1 * factor, [1, 0, 0]));
+// }
+
+// // roll (rotate z-axis)
+// if (gl.input.isKeyDown("a") !== gl.input.isKeyDown("d")) {
+//     const factor = gl.input.isKeyDown("d") ? 1 : -1;
+//     rotations.push(angleAxisToQuat(1 * factor, [0, 0, 1]));
+// }
+
+// let finalRotation = rotations.reduce((a, b) => quat.multiply(a, a, b),
+//     quat.identity(quat.create()));
+// finalRotation = mat4.fromQuat(mat4.create(), finalRotation);
+
+// mat4.multiply(delta, delta, finalRotation);
+
+// const t = gl.drone.localTransform;
+// mat4.multiply(t, t, delta);
 
 /**
  * Loads a model into GPU with the coordinates, colors, and indices provided.
@@ -597,7 +604,42 @@ function loadModel(coords, colors, indices, useStrips) {
     return object;
 }
 
-function loadModelFromFile(filename) {
+function loadCubeModel() {
+    const coords = [
+        1, 1, 1, // A
+        -1, 1, 1, // B
+        -1, -1, 1, // C
+        1, -1, 1, // D
+        1, -1, -1, // E
+        -1, -1, -1, // F
+        -1, 1, -1, // G
+        1, 1, -1, // H
+    ];
+
+    const colors = [
+        1, 0, 0, // red
+        1, 1, 0, // yellow
+        0, 1, 0, // green
+        0, 0, 0, // black (color is not actually used)
+        0, 1, 1, // cyan
+        0, 0, 1, // blue
+        0, 0, 0, // black (color is not actually used)
+        1, 0, 1, // purple
+    ];
+
+    const indices = [
+        1, 2, 0, 2, 3, 0,
+        7, 6, 1, 0, 7, 1,
+        1, 6, 2, 6, 5, 2,
+        3, 2, 4, 2, 5, 4,
+        6, 7, 5, 7, 4, 5,
+        0, 3, 7, 3, 4, 7,
+    ];
+
+    return loadModel(coords, colors, indices);
+}
+
+function loadModelFromJSON(filename) {
     return fetch(filename)
         .then((r) => r.json())
         .then((json) => {
@@ -607,6 +649,60 @@ function loadModelFromFile(filename) {
 
             return loadModel(coords, colors, indices, false);
         });
+}
+
+function parseWavefrontOBJ(text) {
+    let lines = text.split(/\n/);
+
+    lines = filterEmptyStrings(lines);
+    
+    lines = lines.map(line => line.split(/\s/));
+    lines = lines.map(tokens => filterEmptyStrings(tokens));
+    lines = lines.filter(tokens => tokens.length !== 0);
+    
+    // filters comments
+    lines = lines.filter(tokens => tokens[0] !== "#");
+
+    const vertexPositions = [];
+    const vertexNormals = [];
+    const vertexUVs = [];
+    const indices = [];
+
+    const tokensToNumbers = tokens => tokens.map(t => Number(t));
+
+    lines.forEach((tokens) => {
+        const firstToken = tokens.shift();
+
+        if (firstToken === "v") {
+
+        } else if (firstToken === "vt") {
+
+        } else if (firstToken === "vn") {
+
+        } else if (firstToken === "f") {
+
+        } else if (firstToken === "mtllib") {
+
+        } else if (firstToken === "usemtl") {
+
+        } else if (firstToken === "o") {
+            // pass
+        } else if (firstToken === "s") {
+            // pass
+        } else {
+            throw new Error("Invalid token: " + firstToken);
+        }
+    });
+}
+
+function filterEmptyStrings(arr) {
+    return arr.filter(x => x.match(/.+/) !== null);
+}
+
+function loadModelFromWavefrontOBJ(filename) {
+    return fetch(filename)
+        .then((r) => r.text())
+        .then((text) => parseWavefrontOBJ(text));
 }
 
 /**
