@@ -185,9 +185,6 @@ function initProgram() {
  * Also initialize the octree.
  */
 async function initBuffers() {
-    // ignore this it does nothing
-    await loadModelFromWavefrontOBJ("cube.obj");
-
     gl.world = createSceneTreeNode("world");
 
     // Create the camera
@@ -200,7 +197,7 @@ async function initBuffers() {
     }
 
     {
-        gl.cube = createSceneTreeNode("empty");
+        gl.cube = createSceneTreeNode("empty");        
         const t = gl.cube.localTransform;
         mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
     }
@@ -211,7 +208,8 @@ async function initBuffers() {
             for (let y = -1; y <= 1; y++) {
                 for (let z = -1; z <= 1; z++) {
                     const cublet = createSceneTreeNode("model");
-                    cublet.model = loadCubeModel();
+                    cublet.model = await loadModelFromWavefrontOBJ("cube.obj");
+                    // cublet.model = loadCubeModel();
 
                     const t = cublet.localTransform;
                     
@@ -694,6 +692,9 @@ function parseWavefrontOBJ(text) {
     const vertexPositions = [];
     const vertexNormals = [];
     const vertexUVs = [];
+    const newVertexPositions = [];
+    const newVertexNormals = [];
+    const newVertexUVs = [];
     const vertexMappings = [];
     const indices = []; // relative to vertex mappings
 
@@ -755,13 +756,35 @@ function parseWavefrontOBJ(text) {
         } else {
             throw new Error("Invalid token: " + firstToken);
         }
+
+
     });
 
-    console.log(vertexPositions);
-    console.log(vertexNormals);
-    console.log(vertexUVs);
-    console.log(vertexMappings);
-    console.log(indices);
+    const pushNumsFromArray = (arr1, arr2, i, n) => {
+        for (let j = 0; j < n; ++j) {
+            arr1.push(arr2[(i * n) + j]);
+        }
+    }
+
+    for (let i = 0; i < vertexMappings.length; ++i) {
+        const mapping = vertexMappings[i];
+        let [vi, vti, vni] = mapping.split(/\//).map(x => Number(x) - 1);
+
+        pushNumsFromArray(newVertexPositions, vertexPositions, vi, 3);
+        pushNumsFromArray(newVertexUVs, vertexUVs, vti, 2);
+        pushNumsFromArray(newVertexNormals, vertexNormals, vni, 3);
+    }
+
+    //console.log("vertexPositions: ", vertexPositions);
+    // console.log("vertexNormals: ", vertexNormals);
+    // console.log("vertexUVs: ", vertexUVs);
+    // console.log("newVertexPositions: ", newVertexPositions);
+    // console.log("newVertexNormals: ", newVertexNormals);
+    // console.log("newVertexUVs: ", newVertexUVs);
+    // console.log("vertexMappings: ", vertexMappings);
+    // console.log("indices: ", indices);
+
+    return loadModel(newVertexPositions, null, indices);
 }
 
 function filterEmptyStrings(arr) {
