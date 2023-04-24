@@ -494,10 +494,10 @@ function render() {
     gl.bindVertexArray(null);
 }
 
+/** rotate a row or column of the cube when a key is pressed */
 function updateRubiksCubeTransform() {
-    /*
-    // let cube = glMatrix.mat4.create();
-    const centerCube = ...;
+    const centerCube = createSceneTreeNode("cube"); 
+    //let center_cube = glMatrix.mat4.create(); 
 
     // Define positions of little cubes relative to center of Rubik's cube
     const positions = [
@@ -514,56 +514,49 @@ function updateRubiksCubeTransform() {
         [-1, -1, 1], [0, -1, 1], [1, -1, 1],
     ];
 
-    // Check if the user pressed the "r" key
-    if (gl.input.isKeyDown("r")) {
-        // Rotate the right column of the Rubik's cube
-        const centerCube = cubeState[0]; // get the transform of the center cube
-        for (let i = 0; i < centerCube.children.length; i++) {
-        const cublet = centerCube.children[i];
-        if (cublet.position.x > 0.3 && cublet.position.x < 0.5) { // check if the cublet belongs to the right column
-            cublet.position.z = 0.5 - cublet.position.x; // align the cublet with the vertical axis passing through the center cube
-            cublet.position.x = 0.5;
-            cublet.rotateY(Math.PI/2); // rotate the cublet around that vertical axis by 90 degrees
-            cublet.position.x = cublet.position.z + 0.5; // move the cublet back to its original position
-            cublet.position.z = 0;
-        }
+    // Create smaller cubes
+    for (let position in positions) {
+        const cublets = createSceneTreeNode("cube");
+        cublets.scale = [0.2, 0.2, 0.2];
+        cublets.position = positions[position];
+        centerCube.addChild(cublets);
     }
 
-    // rotate the right row of a rubik's cube
-    
-    
-    // for (let u = 0; u < 3; u++) {
-    //     for (let v = 0; v < 3; v++) {
-    //         // const [axisStuckOn, x, y, z] = mapIndices("right", u, v);
+    // Add event listener for key press
+    document.addEventListener('keydown', event => {
+        if (event.key === 'm') {
+            // Rotate the middle row by 90 degrees on the Y axis
+            console.log("rotate m")
+            const rotationAxis = [0, 1, 0];
+            const radians = deg2rad(90);
+            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
+            //gl.cube.localTransform(transformedMatrix);
+        }
 
-    //         const index = (x * 9) + (y * 3) + z;
-    //         const cublet = gl.cube.children[index];
+        if (event.key === 'n') {
+            // Rotate the middle column by 90 degrees on the X axis
+            const rotationAxis = [1, 0, 0];
+            const radians = deg2rad(90);
+            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
+            //gl.cube.localTransform(transformedMatrix);
+        }
 
-    //         // angleAxisToMat4(90, axisStuckOn);
+        if (event.key === 'b') {
+            // Rotate the middle column by 90 degrees on the Z axis
+            const rotationAxis = [0, 0, 1];
+            const radians = deg2rad(90);
+            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
+            //gl.cube.localTransform(transformedMatrix);
+        }
+    });
 
-    //         if (gl.input.isKeyDown("r")) {
-    //             const angle = glMatrix.glMatrix.toRadian(90); // rotation angle in radians
-    //             const axis = [0, 0, -1]; // rotation axis (Z-axis)
-    //             const translation = [1, 0, 0]; // translation vector
-            
-    //             // Apply the rotation and translation to the cube matrix
-    //             glMatrix.mat4.translate(cublet[13], cublet[13], translation);
-    //             glMatrix.mat4.rotate(cublet[13], cublet[13], angle, axis);
-    //             glMatrix.mat4.translate(cublet[13], cublet[13], [-translation[0], -translation[1], -translation[2]]);
-        
-    //             //gl.cube.localTransform = cube;
-    //         }
-    //     }
-    // }
-
-}
-
-// rotate a whole 
-// if (gl.input.isKeyDown("r")) {
-//     const t = gl.cube.localTransform;
-//     mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
-// }
-*/
+    return centerCube;
 }
 
 /**
@@ -574,20 +567,39 @@ function deg2rad(degrees) {
 }
 
 
-function onCubeRotation() {
-    // rotate an entire row or column of the cube
-    let cube = glMatrix.mat4.create();
+// Function to rotate the row containing the specified child cube
+function rotateRowContainingChild(child) {
+    // Get the parent node of the child
+    const parent = child.getParent();
 
-    // rotate the right row
-    if (gl.input.isKeyDown("r")) {
-        const t = glMatrix.mat4.rotateY(cube, cube, deg2rad(45));
-        console.log("rotated 45 degrees on y axis")
-        mat4.multiply(cube, cube, t);
-        gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, cube);
+    // Find the row that the child belongs to
+    let rowIndex = null;
+    for (let i = 0; i < parent.children.length; i++) {
+        const position = parent.children[i].position;
+        if (position[1] === child.position[1]) {
+            rowIndex = Math.floor(i / 3);
+            break;
+        }
     }
-    
-    
+
+    // Rotate the entire row along the X or Z axis depending on the orientation of the row
+    if (rowIndex === 0 || rowIndex === 2) {
+        // Row is oriented along the X axis
+        const radians = deg2rad(90);
+        const rotationMatrix = glMatrix.mat4.fromXRotation(glMatrix.mat4.create(), radians);
+        const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
+        const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
+        parent.setLocalTransform(transformedMatrix);
+    } else {
+        // Row is oriented along the Z axis
+        const radians = deg2rad(90);
+        const rotationMatrix = glMatrix.mat4.fromZRotation(glMatrix.mat4.create(), radians);
+        const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
+        const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
+        parent.setLocalTransform(transformedMatrix);
+    }
 }
+
 /**
  * Loads a model into GPU with the coordinates, colors, and indices provided.
  */
