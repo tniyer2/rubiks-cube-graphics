@@ -170,20 +170,15 @@ function initProgram() {
 }
 
 /**
- * Initialize the camera and the data buffers.
- * Also initialize the octree.
+ * Create the camera and all objects in the world.
+ * Load all objects' models.
  */
 async function initBuffers() {
     gl.world = createSceneTreeNode("world");
 
     // Create the camera
     const camera = createSceneTreeNode("camera");
-    {
-        const t = camera.localTransform;
-        const translation = mat4.fromTranslation(mat4.create(), [0, 0, 4]);
-        
-        mat4.multiply(t, t, translation);
-    }
+    translateMat4(camera.localTransform, [0, 0, 4]);
 
     {
         gl.cube = createSceneTreeNode("empty");        
@@ -201,9 +196,10 @@ async function initBuffers() {
                     // cublet.model = loadCubeModel();
 
                     const t = cublet.localTransform;
-                    
-                    mat4.multiply(t, t, mat4.fromTranslation(mat4.create(), [x, y, z].map(e => 0.5 * e)));
-                    scaleByConstant(t, 0.2);
+                    const translation = mat4.fromTranslation(mat4.create(), [x, y, z].map(e => 0.5 * e));
+                    mat4.multiply(t, t, translation);
+                    scaleMat4(t, 0.2);
+
                     gl.cube.addChild(cublet);
                 }
             }
@@ -845,14 +841,24 @@ function radiansToDegrees(angle) {
     return (angle * 360) / (2 * Math.PI);
 }
 
-// scales a mat4 by a constant.
-function scaleByConstant(matrix, value) {
-    const scaling = mat4.fromScaling(
-        mat4.create(),
-        Array(3).fill(value)
-    );
+// Translates a mat4 by a vec3 or Number.
+function translateMat4(matrix, v) {
+    if (typeof v === "number") {
+        v = [v, v, v];
+    }
 
-    mat4.multiply(matrix, matrix, scaling);
+    const t = mat4.fromTranslation(mat4.create(), v);
+    return mat4.multiply(matrix, matrix, t);
+}
+
+// Scales a mat4 by a vec3 or Number.
+function scaleMat4(matrix, v) {
+    if (typeof v === "number") {
+        v = [v, v, v];
+    }
+
+    const s = mat4.fromScaling(mat4.create(), v);
+    return mat4.multiply(matrix, matrix, s);
 }
 
 /**
