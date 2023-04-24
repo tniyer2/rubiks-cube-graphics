@@ -12,24 +12,23 @@ const quat = glMatrix.quat;
 let gl;
 
 window.addEventListener('load', async function init() {
-    // Get the HTML5 canvas object from it's ID
+    // Get the canvas element.
     const canvas = document.getElementById('webgl-canvas');
     if (!canvas) { window.alert('Could not find #webgl-canvas'); return; }
 
-    // Get the WebGL context (save into a global variable)
+    // Get the WebGL context.
     gl = canvas.getContext('webgl2');
     if (!gl) { window.alert("WebGL isn't available"); return; }
 
-    // Configure WebGL
+    // Configure WebGL.
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.1, 0.8, 1.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     
-    // Initialize the WebGL program and data
+    // Initialize the WebGL program and data.
     gl.program = initProgram();
     await initBuffers();
-
     initEvents();
     onWindowResize();
 
@@ -50,15 +49,13 @@ window.addEventListener('load', async function init() {
  * Initializes the WebGL program.
  */
 function initProgram() {
-    // Compile shaders
+    // Compile shaders.
     // Vertex Shader
-    let vert_shader = compileShader(gl, gl.VERTEX_SHADER,
+    const vert_shader = compileShader(gl, gl.VERTEX_SHADER,
         `#version 300 es
         precision mediump float;
 
-        uniform vec4 uLight; // Light position
-        uniform float uLightIntensity;
-
+        uniform vec4 uLight;
         uniform mat4 uModelMatrix;
         uniform mat4 uCameraMatrix;
         uniform mat4 uProjectionMatrix;
@@ -70,8 +67,6 @@ function initProgram() {
         out vec3 vNormalVector;
         out vec3 vLightVector;
         out vec3 vEyeVector;
-        out float vLightIntensity;
-
         flat out vec3 vColor;
 
         void main() {
@@ -84,7 +79,6 @@ function initProgram() {
             vec4 light = viewMatrix * uLight;
             vLightVector = (light.w == 1.0) ? (P - light).xyz : light.xyz;
             vEyeVector = -P.xyz; // from position to camera
-            vLightIntensity = uLightIntensity;
 
             gl_Position = uProjectionMatrix * P;
             vColor = aColor;
@@ -92,13 +86,12 @@ function initProgram() {
     );
 
     // Fragment Shader
-    let frag_shader = compileShader(gl, gl.FRAGMENT_SHADER,
+    const frag_shader = compileShader(gl, gl.FRAGMENT_SHADER,
         `#version 300 es
         precision mediump float;
 
         // Light constants
         const vec3 lightColor = normalize(vec3(1.0, 1.0, 1.0));
-        in float vLightIntensity;
 
         // Material constants
         const float materialAmbient = 0.2;
@@ -111,11 +104,11 @@ function initProgram() {
         const float lightConstantB = 0.05;
         const float lightConstantC = 1.0;
 
+        uniform float uLightIntensity;
+
         in vec3 vNormalVector;
         in vec3 vLightVector;
         in vec3 vEyeVector;
-
-        // Fragment base color
         flat in vec3 vColor;
 
         // Output color of the fragment
@@ -144,38 +137,34 @@ function initProgram() {
             float D = materialDiffuse * diffuse * attenuation;
             float S = materialSpecular * specular * attenuation;
 
-            fragColor.rgb = (((A + D) * vColor) + S) * lightColor * vLightIntensity;
+            fragColor.rgb = (((A + D) * vColor) + S) * lightColor * uLightIntensity;
             fragColor.a = 1.0;
         }
         `
     );
 
-    // Link the shaders into a program and use them with the WebGL context
-    let program = linkProgram(gl, vert_shader, frag_shader);
+    // Link the shaders into a program and use them with the WebGL context.
+    const program = linkProgram(gl, vert_shader, frag_shader);
     gl.useProgram(program);
     
-    // Get the attribute indices
-    program.aPosition = gl.getAttribLocation(program, 'aPosition');
-    program.aNormal = gl.getAttribLocation(program, 'aNormal');
-    program.aColor = gl.getAttribLocation(program, 'aColor');
+    // Get the attribute indices.
+    const attributes = ['aPosition', 'aNormal', 'aColor'];
+    for (const a of attributes) {
+        program[a] = gl.getAttribLocation(program, a);
+    }
 
-    // Get the uniform indices
-    program.uCameraMatrix = gl.getUniformLocation(program, 'uCameraMatrix');
-    program.uModelMatrix = gl.getUniformLocation(program, 'uModelMatrix');
-    program.uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
-    program.uLight = gl.getUniformLocation(program, 'uLight');
-    program.uLightIntensity = gl.getUniformLocation(program, 'uLightIntensity');
-
-    /*
-    program.uLightAttenuation = gl.getUniformLocation(program, 'uLightAttenuation');
-    program.uLightAmbient = gl.getUniformLocation(program, 'uLightAmbient');
-    program.uLightDiffuse = gl.getUniformLocation(program, 'uLightDiffuse');
-    program.uLightSpecular = gl.getUniformLocation(program, 'uLightSpecular');
-    program.uMaterialAmbient = gl.getUniformLocation(program, 'uMaterialAmbient');
-    program.uMaterialDiffuse = gl.getUniformLocation(program, 'uMaterialDiffuse');
-    program.uMaterialSpecular = gl.getUniformLocation(program, 'uMaterialSpecular');
-    program.uMaterialShininess = gl.getUniformLocation(program, 'uMaterialShininess');
-    */
+    // Get the uniform indices.
+    const uniforms = [
+        'uCameraMatrix', 'uModelMatrix', 'uProjectionMatrix',
+        'uLight', 'uLightIntensity',
+        /*
+        uLightAttenuation, uLightAmbient, uLightDiffuse, uLightSpecular,
+        uMaterialAmbient, uMaterialDiffuse, uMaterialSpecular, uMaterialShininess
+        */
+    ];
+    for (const u of uniforms) {
+        program[u] = gl.getUniformLocation(program, u);
+    }
 
     return program;
 }
@@ -225,44 +214,6 @@ async function initBuffers() {
 
     gl.world.addChild(camera);
     gl.world.camera = camera;
-}
-
-/**
- * Creates a default scene tree node.
- */
-function createSceneTreeNode(type) {
-    let obj = {
-        type: type,
-        localTransform: mat4.identity(mat4.create()),
-        parent: null,
-        children: []
-    };
-
-    obj.addChild = function addChild(child) {
-        if (child.parent !== null) {
-            throw new Error("Child already has a parent.");
-        }
-
-        child.parent = this;
-        this.children.push(child);
-    }
-
-    Object.defineProperty(obj, "transform", {
-        get: function () {
-            if (this.parent === null) {
-                return this.localTransform;
-            } else {
-                const t = mat4.multiply(
-                    mat4.create(),
-                    this.parent.transform,
-                    this.localTransform
-                );
-                return t;
-            }
-        }
-    });
-
-    return obj;
 }
 
 /**
@@ -588,6 +539,45 @@ function onCubeRotation() {
     
     
 }
+
+/**
+ * Creates a default scene tree node.
+ */
+function createSceneTreeNode(type) {
+    let obj = {
+        type: type,
+        localTransform: mat4.identity(mat4.create()),
+        parent: null,
+        children: []
+    };
+
+    obj.addChild = function addChild(child) {
+        if (child.parent !== null) {
+            throw new Error("Child already has a parent.");
+        }
+
+        child.parent = this;
+        this.children.push(child);
+    }
+
+    Object.defineProperty(obj, "transform", {
+        get: function () {
+            if (this.parent === null) {
+                return this.localTransform;
+            } else {
+                const t = mat4.multiply(
+                    mat4.create(),
+                    this.parent.transform,
+                    this.localTransform
+                );
+                return t;
+            }
+        }
+    });
+
+    return obj;
+}
+
 /**
  * Loads a model into GPU with the coordinates, colors, and indices provided.
  */
