@@ -181,13 +181,13 @@ function initProgram() {
  * Set the initial value of some uniforms.
  */
 function initUniforms() {
-    gl.uniform3fv(gl.program.uLightAmbient, stringToColor("#ffffff"));
-    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor("#ffffff"));
-    gl.uniform3fv(gl.program.uLightSpecular, stringToColor("#ffffff"));
+    gl.uniform3fv(gl.program.uLightAmbient, stringToColorFloat32("#ffffff"));
+    gl.uniform3fv(gl.program.uLightDiffuse, stringToColorFloat32("#ffffff"));
+    gl.uniform3fv(gl.program.uLightSpecular, stringToColorFloat32("#ffffff"));
 
-    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor("#330000"));
-    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor("#a00000"));
-    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor("#606060"));
+    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColorFloat32("#330000"));
+    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColorFloat32("#a00000"));
+    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColorFloat32("#606060"));
     gl.uniform1f(gl.program.uMaterialShininess, 5);
 }
 
@@ -227,39 +227,10 @@ async function initGameWorld() {
     const ORANGE = stringToColor("#FE5000");
     const WHITE = stringToColor("#FFFFFF");
     const GREEN = stringToColor("#009A44");
+    const BLACK = [0, 0, 0];
 
-    const colors = [
-        ...RED,
-        ...RED,
-        ...RED,
-
-        ...BLUE,
-        ...BLUE,
-        ...BLUE,
-
-        ...YELLOW,
-        ...YELLOW,
-        ...YELLOW,
-
-        ...ORANGE,
-        ...ORANGE,
-        ...ORANGE,
-
-        ...WHITE,
-        ...WHITE,
-        ...WHITE,
-
-        ...GREEN,
-        ...GREEN,
-        ...GREEN,
-
-        0, 0, 0, // black
-        0, 0, 0, // black
-        0, 0, 0, // black
-        0, 0, 0, // black
-        0, 0, 0, // black
-        0, 0, 0, // black
-    ];
+    const colors = [RED, BLUE, YELLOW, ORANGE, WHITE, GREEN, BLACK, BLACK]
+        .flatMap(c => [c, c, c]).flat();
 
     const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { colors });
     const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "edge.obj", { colors });
@@ -575,9 +546,13 @@ function rotateRowContainingChild(child) {
 }
 
 function stringToColor(str) {
-    return Float32Array.of(
+    return [
         parseInt(str.substr(1, 2), 16) / 255.0,
         parseInt(str.substr(3, 2), 16) / 255.0,
         parseInt(str.substr(5, 2), 16) / 255.0
-    );
+    ];
+}
+
+function stringToColorFloat32(str) {
+    return Float32Array.from(stringToColor(str));
 }
