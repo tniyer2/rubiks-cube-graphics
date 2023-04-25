@@ -12,7 +12,7 @@ function createSceneTreeNode(type) {
         children: []
     };
 
-    obj.addChild = function addChild(child) {
+    obj.addChild = function (child) {
         if (child.parent !== null) {
             throw new Error("Child already has a parent.");
         }

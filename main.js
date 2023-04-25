@@ -20,8 +20,11 @@ import {
 } from "./input.js";
 
 
-// Global WebGL context variable
+// Global WebGL context variable.
 let gl;
+
+// For storing other globals.
+const GLB = {};
 
 window.addEventListener("load", async function init() {
     // Get the canvas element.
@@ -31,7 +34,7 @@ window.addEventListener("load", async function init() {
     // Get the WebGL context.
     gl = canvas.getContext("webgl2");
     if (!gl) { window.alert("WebGL isn't available"); return; }
-    gl.canvasElm = canvas;
+    GLB.canvasElm = canvas;
 
     // Configure WebGL.
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -193,29 +196,29 @@ function initUniforms() {
  * Load all objects' models.
  */
 async function initGameWorld() {
-    gl.world = createSceneTreeNode("world");
+    GLB.world = createSceneTreeNode("world");
 
     // Create the camera.
     {
         const camera = createSceneTreeNode("camera");
         translateMat4(camera.localTransform, [0, 0, 4]);
 
-        gl.world.camera = camera;
-        gl.world.addChild(camera);
+        GLB.world.camera = camera;
+        GLB.world.addChild(camera);
     }
 
     // Create the Rubik's Cube Parent Objects.
     {
-        gl.rubiksCube = createSceneTreeNode("empty");
-        rotateMat4(gl.rubiksCube.localTransform, 30, [1, 0, 0]);
-        rotateMat4(gl.rubiksCube.localTransform, 45, [0, 1, 0]);
+        GLB.rubiksCube = createSceneTreeNode("empty");
+        rotateMat4(GLB.rubiksCube.localTransform, 30, [1, 0, 0]);
+        rotateMat4(GLB.rubiksCube.localTransform, 45, [0, 1, 0]);
 
-        gl.childrens = createSceneTreeNode("empty");
-        gl.temp = createSceneTreeNode("empty");
+        GLB.childrens = createSceneTreeNode("empty");
+        GLB.temp = createSceneTreeNode("empty");
 
-        gl.world.addChild(gl.rubiksCube);
-        gl.rubiksCube.addChild(gl.childrens);
-        gl.rubiksCube.addChild(gl.temp);
+        GLB.world.addChild(GLB.rubiksCube);
+        GLB.rubiksCube.addChild(GLB.childrens);
+        GLB.rubiksCube.addChild(GLB.temp);
     }
 
     const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj");
@@ -245,7 +248,7 @@ async function initGameWorld() {
                 // TODO: When models are complete, rotate them so they are oriented correctly.
                 scaleMat4(cublet.localTransform, 0.2);
 
-                gl.childrens.addChild(cublet);
+                GLB.childrens.addChild(cublet);
             }
         }
     }
@@ -257,9 +260,9 @@ async function initGameWorld() {
 function initEvents() {
     window.addEventListener("resize", onWindowResize);
 
-    gl.input = createKeyInputManager(window);
+    GLB.keyInput = createKeyInputManager(window);
 
-    const handler = createMouseHandler(gl.canvasElm, onMouse);
+    const handler = createMouseHandler(GLB.canvasElm, onMouse);
     handler.attach();
 }
 
@@ -276,6 +279,20 @@ function onWindowResize() {
     updateProjectionMatrix();
 }
 
+/**
+ * Updates the projection matrix based on the current canvas dimensions.
+ */
+function updateProjectionMatrix() {
+    let [w, h] = [gl.canvas.width, gl.canvas.height];
+
+    const proj = mat4.perspective(mat4.create(), degreesToRadians(90), w / h, 0.0001, 1000);
+
+    // orthographic for debugging
+    // const proj = mat4.ortho(mat4.create(), -2, 2, -2, 2, 1000, -1000);
+
+    gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, proj);
+}
+
 const ROTATE_Z_KEY = "Meta";
 const LOCK_AXIS_KEY = "Shift";
 const LOCK_STEP_KEY = "Alt";
@@ -285,19 +302,21 @@ const Z_ROTATE_SPEED = 3;
 const STEP_SIZE = 20;
 
 /**
- * Handle the click-and-drag to rotate the Rubik's cube.
+ * Handles rotating the Rubik's cube
+ * when clicking and dragging.
  */
-function onMouse(e, type, self) {
+function onMouse(e, state, self) {
     function updateTransform() {
-        const rotateZ = gl.input.isKeyDown(ROTATE_Z_KEY);
-        const lockAxis = gl.input.isKeyDown(LOCK_AXIS_KEY);
-        const lockStep = gl.input.isKeyDown(LOCK_STEP_KEY);
+        const rotateZ = GLB.keyInput.isKeyDown(ROTATE_Z_KEY);
+        const lockAxis = GLB.keyInput.isKeyDown(LOCK_AXIS_KEY);
+        const lockStep = GLB.keyInput.isKeyDown(LOCK_STEP_KEY);
 
         const applyStep = (x) => Math.floor(x / STEP_SIZE) * STEP_SIZE;
 
         let rot;
         if (rotateZ) {
-            // TODO: (Maybe?) center mousePos on screen space cube center.
+            // TODO: (Maybe?) center mousePos on view space cube center.
+
             const [x, y] = self.mousePos;
             const curAngle = Math.atan2(y, x);
 
@@ -310,9 +329,11 @@ function onMouse(e, type, self) {
             rot = angleAxisToMat4(angle, [0, 0, 1]);
         } else {
             const diff = vec2.subtract(vec2.create(), self.mousePos, self.startMousePos);
+            const [x, y] = diff;
 
-            let angleX = diff[0] * 100 * XY_ROTATE_SPEED;
-            let angleY = diff[1] * 100 * XY_ROTATE_SPEED;
+            const baseSpeed = 100;
+            let angleX = x * baseSpeed * XY_ROTATE_SPEED;
+            let angleY = y * baseSpeed * XY_ROTATE_SPEED;
             
             if (lockStep) {
                 angleX = applyStep(angleX);
@@ -323,60 +344,52 @@ function onMouse(e, type, self) {
             const rotY = angleAxisToMat4(angleY, [-1, 0, 0]);
 
             if (lockAxis) {
-                rot = Math.abs(diff[0]) >= Math.abs(diff[1]) ? rotX : rotY;
+                rot = Math.abs(x) >= Math.abs(y) ? rotX : rotY;
             } else {
                 rot = mat4.multiply(mat4.create(), rotX, rotY);
             }
         }
 
-        gl.rubiksCube.localTransform = mat4.multiply(
+        // Rotate in view space.
+        GLB.rubiksCube.localTransform = mat4.multiply(
             mat4.create(), 
             rot, 
             self.startTransform
         );
     }
 
+    // Saving to self so updateTransform has access to
+    // last captured mouse position when called in a listener.
     self.mousePos = windowToClipSpace(
         e.offsetX, e.offsetY, this.width, this.height);
 
-    if (type === "enter") {
+    if (state === "enter") {
         const clickedLeftMouseButton = e.button === 0;
+
         if (clickedLeftMouseButton) {
             self.startMousePos = self.mousePos;
-            self.startTransform = gl.rubiksCube.transform;
+            self.startTransform = GLB.rubiksCube.transform;
 
             const [x, y] = self.startMousePos;
             self.startAngle = Math.atan2(y, x);
             
             self.removes = [
-                gl.input.addListener(ROTATE_Z_KEY, updateTransform),
-                gl.input.addListener(LOCK_AXIS_KEY, updateTransform),
-                gl.input.addListener(LOCK_STEP_KEY, updateTransform)
+                GLB.keyInput.addListener(ROTATE_Z_KEY, updateTransform),
+                GLB.keyInput.addListener(LOCK_AXIS_KEY, updateTransform),
+                GLB.keyInput.addListener(LOCK_STEP_KEY, updateTransform)
             ];
 
             return true; // enters drag
         }
-    } else if (type === "drag") {
+    } else if (state === "drag") {
         updateTransform();
-    } else if (type === "exit") {
-        self.removes.forEach(r => r());
+    } else if (state === "exit") {
+        for (const remove of self.removes) {
+            remove();
+        }
     }
 
     return false;
-}
-
-/**
- * Updates the projection transformation matrix.
- */
-function updateProjectionMatrix() {
-    let [w, h] = [gl.canvas.width, gl.canvas.height];
-
-    const mv = mat4.perspective(mat4.create(), degreesToRadians(90), w / h, 0.0001, 1000);
-
-    // for debugging
-    // const mv = mat4.ortho(mat4.create(), -2, 2, -2, 2, 1000, -1000);
-
-    gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, mv);
 }
 
 /**
@@ -398,11 +411,10 @@ function render() {
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // warp
     gl.uniform4fv(gl.program.uLight, [0, 0, 10, 1]);
     gl.uniform1f(gl.program.uLightIntensity, 4);
     
-    gl.uniformMatrix4fv(gl.program.uCameraMatrix, false, gl.world.camera.transform);
+    gl.uniformMatrix4fv(gl.program.uCameraMatrix, false, GLB.world.camera.transform);
 
     const draw = function (obj) {
         if (obj.type === "model") {
@@ -418,7 +430,7 @@ function render() {
         }
     }
 
-    draw(gl.world);
+    draw(GLB.world);
 
     // Cleanup
     gl.bindVertexArray(null);
@@ -427,7 +439,7 @@ function render() {
 /** rotate a row or column of the cube when a key is pressed */
 function updateRubiksCubeTransform() {
     const centerCube = createSceneTreeNode("cube"); 
-    //let center_cube = glMatrix.mat4.create(); 
+    //let center_cube = mat4.create(); 
 
     // Define positions of little cubes relative to center of Rubik's cube
     const positions = [
@@ -459,30 +471,30 @@ function updateRubiksCubeTransform() {
             console.log("rotate m")
             const rotationAxis = [0, 1, 0];
             const radians = degreesToRadians(90);
-            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.rubiksCube.localTransform(transformedMatrix);
+            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
+            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            //GLB.rubiksCube.localTransform(transformedMatrix);
         }
 
         if (event.key === "n") {
             // Rotate the middle column by 90 degrees on the X axis
             const rotationAxis = [1, 0, 0];
             const radians = degreesToRadians(90);
-            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.rubiksCube.localTransform(transformedMatrix);
+            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
+            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            //GLB.rubiksCube.localTransform(transformedMatrix);
         }
 
         if (event.key === "b") {
             // Rotate the middle column by 90 degrees on the Z axis
             const rotationAxis = [0, 0, 1];
             const radians = degreesToRadians(90);
-            const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.rubiksCube.localTransform(transformedMatrix);
+            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
+            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            //GLB.rubiksCube.localTransform(transformedMatrix);
         }
     });
 
@@ -492,7 +504,7 @@ function updateRubiksCubeTransform() {
 // Function to rotate the row containing the specified child cube
 function rotateRowContainingChild(child) {
     // Get the parent node of the child
-    const parent = child.getParent();
+    const parent = child.parent;
 
     // Find the row that the child belongs to
     let rowIndex = null;
@@ -508,16 +520,16 @@ function rotateRowContainingChild(child) {
     if (rowIndex === 0 || rowIndex === 2) {
         // Row is oriented along the X axis
         const radians = degreesToRadians(90);
-        const rotationMatrix = glMatrix.mat4.fromXRotation(glMatrix.mat4.create(), radians);
-        const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
-        const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
+        const rotationMatrix = mat4.fromXRotation(mat4.create(), radians);
+        const translationMatrix = mat4.translate(mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
+        const transformedMatrix = mat4.multiply(mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     } else {
         // Row is oriented along the Z axis
         const radians = degreesToRadians(90);
-        const rotationMatrix = glMatrix.mat4.fromZRotation(glMatrix.mat4.create(), radians);
-        const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
-        const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
+        const rotationMatrix = mat4.fromZRotation(mat4.create(), radians);
+        const translationMatrix = mat4.translate(mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
+        const transformedMatrix = mat4.multiply(mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     }
 }
