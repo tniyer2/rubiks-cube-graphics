@@ -1,24 +1,28 @@
 // Rubik's Cube Game
 // Authors: Bryan Cohen & Tanishq Iyer
-'use strict';
+"use strict";
 
-const vec2 = glMatrix.vec2;
-const vec3 = glMatrix.vec3;
-// const vec4 = glMatrix.vec4;
-const mat4 = glMatrix.mat4;
-const quat = glMatrix.quat;
+import {
+    vec2, vec3, vec4, mat4, quat,
+    translateMat4, scaleMat4, rotateMat4,
+    angleAxisToQuat, angleAxisToMat4,
+    degreesToRadians, radiansToDegrees
+} from "./linearAlgebraUtils.js";
+
+import { createMouseHandler, windowToClipSpace, createKeyInputManager } from "./input.js";
 
 // Global WebGL context variable
 let gl;
 
-window.addEventListener('load', async function init() {
+window.addEventListener("load", async function init() {
     // Get the canvas element.
-    const canvas = document.getElementById('webgl-canvas');
-    if (!canvas) { window.alert('Could not find #webgl-canvas'); return; }
+    const canvas = document.getElementById("webgl-canvas");
+    if (!canvas) { window.alert("Could not find #webgl-canvas"); return; }
 
     // Get the WebGL context.
-    gl = canvas.getContext('webgl2');
+    gl = canvas.getContext("webgl2");
     if (!gl) { window.alert("WebGL isn't available"); return; }
+    gl.canvasElm = canvas;
 
     // Configure WebGL.
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -28,18 +32,10 @@ window.addEventListener('load', async function init() {
     
     // Initialize the WebGL program and data.
     gl.program = initProgram();
-    await initBuffers();
+    initUniforms();
+    await initGameWorld();
     initEvents();
     onWindowResize();
-
-    gl.uniform3fv(gl.program.uLightAmbient, stringToColor("#ffffff"));
-    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor("#ffffff"));
-    gl.uniform3fv(gl.program.uLightSpecular, stringToColor("#ffffff"));
-
-    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor("#330000"));
-    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor("#a00000"));
-    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor("#606060"));
-    gl.uniform1f(gl.program.uMaterialShininess, 5);
 
     // Start the Game Loop
     runFrame();
@@ -148,15 +144,15 @@ function initProgram() {
     gl.useProgram(program);
     
     // Get the attribute indices.
-    const attributes = ['aPosition', 'aNormal', 'aColor'];
+    const attributes = ["aPosition", "aNormal", "aColor"];
     for (const a of attributes) {
         program[a] = gl.getAttribLocation(program, a);
     }
 
     // Get the uniform indices.
     const uniforms = [
-        'uCameraMatrix', 'uModelMatrix', 'uProjectionMatrix',
-        'uLight', 'uLightIntensity',
+        "uCameraMatrix", "uModelMatrix", "uProjectionMatrix",
+        "uLight", "uLightIntensity",
         /*
         uLightAttenuation, uLightAmbient, uLightDiffuse, uLightSpecular,
         uMaterialAmbient, uMaterialDiffuse, uMaterialSpecular, uMaterialShininess
@@ -170,113 +166,91 @@ function initProgram() {
 }
 
 /**
- * Create the camera and all objects in the world.
- * Load all objects' models.
+ * Set the initial value of some uniforms.
  */
-async function initBuffers() {
-    gl.world = createSceneTreeNode("world");
+function initUniforms() {
+    gl.uniform3fv(gl.program.uLightAmbient, stringToColor("#ffffff"));
+    gl.uniform3fv(gl.program.uLightDiffuse, stringToColor("#ffffff"));
+    gl.uniform3fv(gl.program.uLightSpecular, stringToColor("#ffffff"));
 
-    // Create the camera
-    const camera = createSceneTreeNode("camera");
-    translateMat4(camera.localTransform, [0, 0, 4]);
-
-    {
-        gl.cube = createSceneTreeNode("empty");        
-        const t = gl.cube.localTransform;
-        mat4.multiply(t, t, angleAxisToMat4(45, [0, 1, 0]));
-    }
-
-    // Create smaller cubes
-    {
-        for (let x = -1; x <= 1; x++) {
-            for (let y = -1; y <= 1; y++) {
-                for (let z = -1; z <= 1; z++) {
-                    const cublet = createSceneTreeNode("model");
-                    cublet.model = await loadModelFromWavefrontOBJ("cube.obj");
-                    // cublet.model = loadCubeModel();
-
-                    const t = cublet.localTransform;
-                    const translation = mat4.fromTranslation(mat4.create(), [x, y, z].map(e => 0.5 * e));
-                    mat4.multiply(t, t, translation);
-                    scaleMat4(t, 0.2);
-
-                    gl.cube.addChild(cublet);
-                }
-            }
-        }
-    }
-
-    gl.world.addChild(gl.cube);
-
-    gl.world.addChild(camera);
-    gl.world.camera = camera;
+    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColor("#330000"));
+    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColor("#a00000"));
+    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColor("#606060"));
+    gl.uniform1f(gl.program.uMaterialShininess, 5);
 }
 
 /**
- * Initialize event handlers
+ * Create the camera and all objects in world.
+ * Load all objects' models.
+ */
+async function initGameWorld() {
+    gl.world = createSceneTreeNode("world");
+
+    // Create the camera.
+    {
+        const camera = createSceneTreeNode("camera");
+        translateMat4(camera.localTransform, [0, 0, 4]);
+
+        gl.world.camera = camera;
+        gl.world.addChild(camera);
+    }
+
+    // Create the Rubik's Cube Parent Objects.
+    {
+        gl.rubiksCube = createSceneTreeNode("empty");
+        rotateMat4(gl.rubiksCube.localTransform, 30, [1, 0, 0]);
+        rotateMat4(gl.rubiksCube.localTransform, 45, [0, 1, 0]);
+
+        gl.childrens = createSceneTreeNode("empty");
+        gl.temp = createSceneTreeNode("empty");
+
+        gl.world.addChild(gl.rubiksCube);
+        gl.rubiksCube.addChild(gl.childrens);
+        gl.rubiksCube.addChild(gl.temp);
+    }
+
+    const centerCubletModel = await loadModelFromWavefrontOBJ("center.obj");
+    const edgeCubletModel = await loadModelFromWavefrontOBJ("edge.obj");
+    const cornerCubletModel = await loadModelFromWavefrontOBJ("corner.obj");
+
+    const cubletModels = [
+        cornerCubletModel,
+        edgeCubletModel, 
+        centerCubletModel,
+        centerCubletModel
+    ];
+
+    // Create smaller cubes
+    for (let x = 0; x < 3; ++x) {
+        for (let y = 0; y < 3; ++y) {
+            for (let z = 0; z < 3; ++z) {
+                const cublet = createSceneTreeNode("model");
+
+                const numAxesCentered = [x, y, z]
+                    .map(axis => axis === 1 ? 1 : 0)
+                    .reduce((a, b) => a + b);
+                
+                cublet.model = cubletModels[numAxesCentered];
+
+                translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
+                // TODO: When models are complete, rotate them so they are oriented correctly.
+                scaleMat4(cublet.localTransform, 0.2);
+
+                gl.childrens.addChild(cublet);
+            }
+        }
+    }
+}
+
+/**
+ * Initialize event handlers.
  */
 function initEvents() {
-    // stores which keys are pressed
-    gl.input = {
-        state: {},
-        listeners: {},
-        reset: function () { this.state = {}; },
-        isKeyDown: function (key) {
-            return this.state[key] === true;
-        },
-        addListener: function (key, listener) {
-            let arr;
-            if (key in this.listeners) {
-                arr = this.listeners[key];
-            } else {
-                arr = [];
-                this.listeners[key] = arr;
-            }
+    window.addEventListener("resize", onWindowResize);
 
-            arr.push(listener);
+    gl.input = createKeyInputManager(window);
 
-            let isRemoved = false
-
-            return function removeListener() {
-                if (isRemoved === false) {
-                    isRemoved = true;
-                    arr.splice(arr.indexOf(listener), 1);
-                }
-            };
-        },
-        callListeners: function (key, newValue) {
-            if (key in this.listeners) {
-                for (const listener of this.listeners[key]) {
-                    listener(newValue);
-                }
-            }
-        }
-    };
-
-    window.addEventListener('resize', onWindowResize);
-
-    window.addEventListener('keydown', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (e.repeat === false) {
-            gl.input.state[e.key] = true;
-            gl.input.callListeners(e.key, true);
-        }
-    });
-
-    window.addEventListener('keyup', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        gl.input.state[e.key] = false;
-        gl.input.callListeners(e.key, false);
-    });
-
-    const handler = createMouseHandler(
-        document.getElementsByTagName('canvas')[0],
-        onMouse
-    );
+    const handler = createMouseHandler(gl.canvasElm, onMouse);
     handler.attach();
 }
 
@@ -346,7 +320,7 @@ function onMouse(e, type, self) {
             }
         }
 
-        gl.cube.localTransform = mat4.multiply(
+        gl.rubiksCube.localTransform = mat4.multiply(
             mat4.create(), 
             rot, 
             self.startTransform
@@ -360,7 +334,7 @@ function onMouse(e, type, self) {
         const clickedLeftMouseButton = e.button === 0;
         if (clickedLeftMouseButton) {
             self.startMousePos = self.mousePos;
-            self.startTransform = gl.cube.transform;
+            self.startTransform = gl.rubiksCube.transform;
 
             const [x, y] = self.startMousePos;
             self.startAngle = Math.atan2(y, x);
@@ -470,49 +444,41 @@ function updateRubiksCubeTransform() {
     }
 
     // Add event listener for key press
-    document.addEventListener('keydown', event => {
-        if (event.key === 'm') {
+    document.addEventListener("keydown", event => {
+        if (event.key === "m") {
             // Rotate the middle row by 90 degrees on the Y axis
             console.log("rotate m")
             const rotationAxis = [0, 1, 0];
-            const radians = deg2rad(90);
+            const radians = degreesToRadians(90);
             const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
             const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.cube.localTransform(transformedMatrix);
+            //gl.rubiksCube.localTransform(transformedMatrix);
         }
 
-        if (event.key === 'n') {
+        if (event.key === "n") {
             // Rotate the middle column by 90 degrees on the X axis
             const rotationAxis = [1, 0, 0];
-            const radians = deg2rad(90);
+            const radians = degreesToRadians(90);
             const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
             const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.cube.localTransform(transformedMatrix);
+            //gl.rubiksCube.localTransform(transformedMatrix);
         }
 
-        if (event.key === 'b') {
+        if (event.key === "b") {
             // Rotate the middle column by 90 degrees on the Z axis
             const rotationAxis = [0, 0, 1];
-            const radians = deg2rad(90);
+            const radians = degreesToRadians(90);
             const rotationMatrix = glMatrix.mat4.fromRotation(glMatrix.mat4.create(), radians, rotationAxis);
-            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.cube.localTransform, [0, 0, 0]);
+            const translatedMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), gl.rubiksCube.localTransform, [0, 0, 0]);
             const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), rotationMatrix, translatedMatrix);
-            //gl.cube.localTransform(transformedMatrix);
+            //gl.rubiksCube.localTransform(transformedMatrix);
         }
     });
 
     return centerCube;
 }
-
-/**
- * Converts degrees to radians.
- */
-function deg2rad(degrees) {
-    return degrees * Math.PI / 180;
-}
-
 
 // Function to rotate the row containing the specified child cube
 function rotateRowContainingChild(child) {
@@ -521,7 +487,7 @@ function rotateRowContainingChild(child) {
 
     // Find the row that the child belongs to
     let rowIndex = null;
-    for (let i = 0; i < parent.children.length; i++) {
+    for (let i = 0; i < parent.children.length; ++i) {
         const position = parent.children[i].position;
         if (position[1] === child.position[1]) {
             rowIndex = Math.floor(i / 3);
@@ -532,14 +498,14 @@ function rotateRowContainingChild(child) {
     // Rotate the entire row along the X or Z axis depending on the orientation of the row
     if (rowIndex === 0 || rowIndex === 2) {
         // Row is oriented along the X axis
-        const radians = deg2rad(90);
+        const radians = degreesToRadians(90);
         const rotationMatrix = glMatrix.mat4.fromXRotation(glMatrix.mat4.create(), radians);
         const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
         const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     } else {
         // Row is oriented along the Z axis
-        const radians = deg2rad(90);
+        const radians = degreesToRadians(90);
         const rotationMatrix = glMatrix.mat4.fromZRotation(glMatrix.mat4.create(), radians);
         const translationMatrix = glMatrix.mat4.translate(glMatrix.mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
         const transformedMatrix = glMatrix.mat4.multiply(glMatrix.mat4.create(), translationMatrix, rotationMatrix);
@@ -811,419 +777,6 @@ function loadArrayBuffer(values, location, numComponents, componentType) {
     gl.enableVertexAttribArray(location);
 
     return buf;
-}
-
-/**
- * converts from angle-axis to quaternion.
- * angle: angle in degrees.
- * axis: a vec3 representing a direction.
- */
-function angleAxisToQuat(angle, axis) {
-    angle = degreesToRadians(angle);
-    
-    axis = vec3.normalize(vec3.create(), axis);
-
-    const sin = Math.sin(angle/2);
-    const cos = Math.cos(angle/2);
-
-    const q = quat.fromValues(
-        axis[0] * sin,
-        axis[1] * sin,
-        axis[2] * sin,
-        cos
-    );
-
-    return q;
-}
-
-function angleAxisToMat4(angle, axis) {
-    const q = angleAxisToQuat(angle, axis);
-    
-    return mat4.fromQuat(mat4.create(), q);
-}
-
-// Converts an angle in degrees to radians.
-function degreesToRadians(angle) {
-    return (angle / 360) * (2 * Math.PI);
-}
-
-// Converts an angle in radians to degrees.
-function radiansToDegrees(angle) {
-    return (angle * 360) / (2 * Math.PI);
-}
-
-// Translates a mat4 by a vec3 or Number.
-function translateMat4(matrix, v) {
-    if (typeof v === "number") {
-        v = [v, v, v];
-    }
-
-    const t = mat4.fromTranslation(mat4.create(), v);
-    return mat4.multiply(matrix, matrix, t);
-}
-
-// Scales a mat4 by a vec3 or Number.
-function scaleMat4(matrix, v) {
-    if (typeof v === "number") {
-        v = [v, v, v];
-    }
-
-    const s = mat4.fromScaling(mat4.create(), v);
-    return mat4.multiply(matrix, matrix, s);
-}
-
-/**
- * Create a quad tree.
- * model    - loaded model from createModel().
- * origin_  - center or starting point of the tree.
- * length_  - the length and width of the tree.
- * maxDepth - the number of nodes before the tree stops splitting.
- */
-function createQuadTree(model, modelTransform, origin_, size_, maxDepth) {
-    if (typeof maxDepth !== 'number' || maxDepth < 1) {
-        throw new Error("Invalid argument.");
-    }
-
-    // if isXAxis is false it implies the node splits on the z-axis.
-    const createNode = (isXAxis, origin, size, depth) => {
-        const node = {
-            isXAxis, origin, size, depth, front: null, back: null
-        };
-
-        if (depth === maxDepth) {
-            node.leafs = [];
-        }
-
-        node._initChild = function (isFront) {
-            isFront = isFront === true;
-
-            const notAxis = this.isXAxis ? 1 : 0;
-
-            let newSize = vec2.clone(this.size);
-            newSize[notAxis] /= 2;
-
-            const delta = (isFront ? 1 : -1) * (newSize[notAxis] / 2);
-            const deltaVec = this.isXAxis ? [0, 0, delta] : [delta, 0, 0];
-
-            const newOrigin = vec3.add(vec3.create(), this.origin, deltaVec);
-
-            const node = createNode(!this.isXAxis, newOrigin, newSize, this.depth+1);
-
-            if (isFront) {
-                this.front = node;
-            } else {
-                this.back = node;
-            }
-        };
-
-        // adds a triangle to the tree, possibly creating new nodes.
-        node._add = function (triangle) {
-            // base case
-            if (this.depth === maxDepth) {
-                this.leafs.push(triangle);
-                return;
-            }
-
-            let [inFront, isBack] = this._isTriangleInFrontOrBack(triangle);
-            
-            if (inFront) {
-                if (this.front === null) {
-                    this._initChild(true);
-                }
-                this.front._add(triangle);
-            }
-            if (isBack) {
-                if (this.back === null) {
-                    this._initChild(false);
-                }
-                this.back._add(triangle);
-            }
-        };
-
-        // returns whether a triangle should go in the front node
-        // and whether it should go in the back node.
-        node._isTriangleInFrontOrBack = function (triangle) {
-            const axis = this.isXAxis ? 2 : 0;
-
-            let isFront = false;
-            let isBack = false;
-
-            for (let point of triangle) {
-                if (point[axis] >= this.origin[axis]) {
-                    isFront = true;
-                } else {
-                    isBack = true;
-                }
-            }
-
-            return [isFront, isBack];
-        };
-
-        // returns whether a AABB should go in the front node
-        // and whether it should go in the back node.
-        node._isAABBInFrontOrBack = function (aabb) {
-            const axis = this.isXAxis ? 2 : 0;
-
-            let isFront = false;
-            let isBack = false;
-
-            for (let point of [aabb.min, aabb.max]) {
-                if (point[axis] >= this.origin[axis]) {
-                    isFront = true;
-                } else {
-                    isBack = true;
-                }
-            }
-
-            return [isFront, isBack];
-        };
-
-        // returns true if any leafs nodes (triangles) collide with the model
-        node._doesAnyLeafCollide = function (otherModel, otherTransform) {
-            for (let i = 0; i < otherModel.coords.length; i += 9) {
-                let a = otherModel.coords.subarray(i, i+3);
-                a = vec3.transformMat4(vec3.create(), a, otherTransform);
-                
-                let b = otherModel.coords.subarray(i+3, i+6);
-                b = vec3.transformMat4(vec3.create(), b, otherTransform);
-
-                let c = otherModel.coords.subarray(i+6, i+9);
-                c = vec3.transformMat4(vec3.create(), c, otherTransform);
-
-                for (let leaf of this.leafs) {
-                    for (let i = 0; i < 3; i++) {
-                        const p1 = leaf[i];
-                        const p2 = leaf[(i+1)%3];
-                        const v = vec3.subtract(vec3.create(), p2, p1);
-
-                        const intersection = line_seg_triangle_intersection(p1, v, a, b, c);
-
-                        if (intersection !== null && !Number.isNaN(intersection[0])) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        };
-
-        node.checkCollision = function (otherModel, otherTransform) {
-            if (this.depth === maxDepth) {
-                if (this._doesAnyLeafCollide(otherModel, otherTransform)) {
-                    return true;
-                }
-            }
-
-            const aabb = getAxisAlignedXZBoundingBox(otherModel, otherTransform);
-
-            let [isFront, isBack] = this._isAABBInFrontOrBack(aabb);
-
-            if (isFront) {
-                if (this.front !== null && this.front.checkCollision(otherModel, otherTransform)) {
-                    return true;
-                }
-            }
-            if (isBack) {
-                if (this.back !== null && this.back.checkCollision(otherModel, otherTransform)) {
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-        return node;
-    };
-
-    const root = createNode(true, origin_, size_, 1);
-
-    // add the triangles to the tree
-    for (let i = 0; i < model.coords.length; i += 9) {
-        let a = model.coords.subarray(i, i+3);
-        let b = model.coords.subarray(i+3, i+6);
-        let c = model.coords.subarray(i+6, i+9);
-
-        a = vec3.transformMat4(vec3.create(), a, modelTransform);
-        b = vec3.transformMat4(vec3.create(), b, modelTransform);
-        c = vec3.transformMat4(vec3.create(), c, modelTransform);
-
-        const triangle = [a, b, c];
-
-        root._add(triangle);
-    }
-
-    function nodeToString(node) {
-        let s = "";
-
-        s += `${node.depth}, ${node.isXAxis ? "x" : "z"}, ${node.size}, [${node.origin[0]}, ${node.origin[2]}]\n`;
-
-        if (node.leafs) {
-            s += `${" ".repeat(node.depth-1)}  LEAFS: ${node.leafs.length}\n`;
-        } else {
-            s += `${" ".repeat(node.depth-1)}front: ` + (node.front === null ? "null\n" : nodeToString(node.front));
-            s += `${" ".repeat(node.depth-1)}back: ` + (node.back === null ? "null\n" : nodeToString(node.back));
-        }
-
-        return s;
-    }
-
-    // console.log(root);
-    // console.log(nodeToString(root));
-
-    return root;
-}
-
-/**
- * Gets a 2D Axis Aligned Bounding Box for a model.
- * Only the X and Z axes are included.
- * The bounding box includes a min and a max of type Vec3.
- */
-function getAxisAlignedXZBoundingBox(model, transform) {
-    let minX = Number.MAX_VALUE;
-    let maxX = Number.MIN_VALUE;
-
-    let minZ = Number.MAX_VALUE;
-    let maxZ = Number.MIN_VALUE;
-
-    for (let i = 0; i < model.coords.length; i += 3) {
-        let point = model.coords.subarray(i, i+3);
-        point = vec3.transformMat4(vec3.create(), point, transform);
-
-        if (point[0] < minX) {
-            minX = point[0];
-        }
-        if (point[0] > maxX) {
-            maxX = point[0];
-        }
-
-        if (point[2] < minZ) {
-            minZ = point[2];
-        }
-        if (point[2] > maxZ) {
-            maxZ = point[2];
-        }
-    }
-
-    return { min: [minX, 0, minZ],  max: [maxX, 0, maxZ] };
-}
-
-/**
- * Implements all of the click and drag functionality.
- * Returning true in the callback will enable dragging
- * after a mousedown event.
- * @param {*} elm the DOM element to click and drag on.
- * @param {*} callback gets called on every mousedown, mousemove, and mouseup.
- * @param {*} options.self an object that gets passed to the callback.
- * @param {*} options.exitOnLeave should exit drag on 'onmouseleave'.
- * @param {*} options.callDragOnEnter should exit drag on 'onmouseleave'.
- * @returns the mouse handler object.
- */
-function createMouseHandler(elm, callback, options) {
-    if (typeof options === "undefined" || options == null) {
-        options = {};
-    } else if (typeof options !== "object") {
-        throw new Error("Invalid argument.")
-    }
-    {
-        const defaults = {
-            self: {},
-            callDragOnEnter: true,
-            exitOnLeave: true
-        };
-        options = Object.assign(defaults, options);
-    }
-
-    let enteredDrag = false;
-
-    function onMouseDown(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // prevents mousedown from being called after mousemove but before mouseup
-        // this can happen if you move cursor outside of element while drag is in action.
-        if (enteredDrag === true) {
-            enteredDrag = false;
-            exitDrag.call(this, e);
-        } else {
-            enterDrag.call(this, e);
-        }
-    }
-
-    function exitDrag(e) {
-        enteredDrag = false;
-        
-        elm.removeEventListener('mousemove', onMouseMove);
-        elm.removeEventListener('mouseup', onMouseUp);
-        elm.removeEventListener('mouseleave', onMouseLeave);
-        elm.addEventListener('mousedown', onMouseDown);
-
-        callback.call(this, e, "exit", options.self);
-    }
-
-    function enterDrag(e) {
-        const shouldEnterDrag = callback.call(this, e, "enter", options.self);
-
-        if (shouldEnterDrag === true) {
-            enteredDrag = true;
-
-            elm.removeEventListener('mousedown', onMouseDown)
-            elm.addEventListener('mousemove', onMouseMove);
-            elm.addEventListener('mouseup', onMouseUp);
-            elm.addEventListener('mouseleave', onMouseLeave);
-
-            if (options.callDragOnEnter) {
-                callback.call(this, e, "drag", options.self);
-            }
-        }
-    }
-
-    function onMouseMove(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        callback.call(this, e, "drag", options.self);
-    }
-
-    function onMouseUp(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        exitDrag.call(this, e);
-    }
-
-    function onMouseLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (options.exitOnLeave) {
-            exitDrag.call(this, e);
-        }
-    }
-
-    return {
-        attach: () => {
-            elm.addEventListener('mousedown', onMouseDown);
-        },
-        detach: () => {
-            enteredDrag = false;
-
-            elm.removeEventListener('mousedown', onMouseDown);
-            elm.removeEventListener('mousemove', onMouseMove);
-            elm.removeEventListener('mouseup', onMouseUp);
-            elm.removeEventListener('mouseleave', onMouseLeave);
-        },
-    }
-}
-
-/**
- * Convert x and y from window coordinates (in pixels)
- * relative to a canvas element to clip coordinates (-1,-1 to 1,1).
- */
-function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
-    return [
-        (x / (canvasWidth / 2)) - 1,
-        ((-y) / (canvasHeight / 2)) + 1
-    ];
 }
 
 function stringToColor(str) {

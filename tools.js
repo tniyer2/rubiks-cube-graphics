@@ -1,5 +1,5 @@
 // Various useful functions - feel free to add additional functions to this file (or other files)
-/* exported calc_normals, loadTexture, loadCubemapTexture */
+/* exported calc_normals, loadTexture, loadCubemapTexture, logXTimes, logOnce */
 
 /**
  * Load a texture onto the GPU. The image must be power-of-two sized image using RGBA with uint8
