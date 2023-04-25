@@ -221,9 +221,49 @@ async function initGameWorld() {
         GLB.rubiksCube.addChild(GLB.temp);
     }
 
-    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj");
-    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "edge.obj");
-    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "corner.obj");
+    const RED = stringToColor("#BA0C2F");
+    const BLUE = stringToColor("#003DA5");
+    const YELLOW = stringToColor("#FFD700");
+    const ORANGE = stringToColor("#FE5000");
+    const WHITE = stringToColor("#FFFFFF");
+    const GREEN = stringToColor("#009A44");
+
+    const colors = [
+        ...RED,
+        ...RED,
+        ...RED,
+
+        ...BLUE,
+        ...BLUE,
+        ...BLUE,
+
+        ...YELLOW,
+        ...YELLOW,
+        ...YELLOW,
+
+        ...ORANGE,
+        ...ORANGE,
+        ...ORANGE,
+
+        ...WHITE,
+        ...WHITE,
+        ...WHITE,
+
+        ...GREEN,
+        ...GREEN,
+        ...GREEN,
+
+        0, 0, 0, // black
+        0, 0, 0, // black
+        0, 0, 0, // black
+        0, 0, 0, // black
+        0, 0, 0, // black
+        0, 0, 0, // black
+    ];
+
+    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { colors });
+    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "edge.obj", { colors });
+    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "corner.obj", { colors });
 
     const cubletModels = [
         cornerCubletModel,

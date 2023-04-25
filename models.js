@@ -1,32 +1,49 @@
 
 /**
- * Loads a model into GPU with the coordinates, colors, and indices provided.
+ * Loads a model into GPU with the coordinates and indices provided.
+ * Other data can optionally passed through options.
  */
-function loadModel(gl, coords, colors, indices, useStrips) {
-    useStrips = useStrips === true;
+function loadModel(gl, coords, indices, options) {
+    if (typeof options === "undefined") {
+        options = {};
+    } else if (typeof options !== "object") {
+        throw new Error("Invalid argumenmt.");
+    }
+    const DEFAULTS = { colors: null, texCoords: null, normals: null, useStrips: false };
+    options = Object.assign(DEFAULTS, options);
 
-    // Create and bind VAO
-    let vao = gl.createVertexArray();
+    const useStrips = options.useStrips === true;
+
+    // Create and bind VAO.
+    const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     
-    // Load vertex positions into GPU
+    // Load vertex positions into GPU.
     coords = Float32Array.from(coords);
     loadArrayBuffer(gl, coords, gl.program.aPosition, 3, gl.FLOAT);
 
-    // Load vertex normals into GPU
-    const normals = calc_normals(coords, indices, useStrips)
+    // Load vertex normals into GPU.
+    let normals;
+    if (options.normals !== null) {
+        normals = Float32Array.from(options.normals);
+    } else {
+        normals = calc_normals(coords, indices, useStrips);
+    }
     loadArrayBuffer(gl, normals, gl.program.aNormal, 3, gl.FLOAT);
 
+    // Load vertex colors into GPU.
+    let colors = options.colors;
     if (colors === null) {
-        colors = Array(coords.length / 3).fill().flatMap(() => [0, 1, 0]);
+        const GREEN = [0, 1, 0];
+        colors = Array(coords.length / 3).fill().flatMap(() => GREEN);
     }
-    
-    // Load vertex colors into GPU
-    loadArrayBuffer(gl, Float32Array.from(colors), gl.program.aColor, 3, gl.FLOAT);
+    colors = Float32Array.from(colors);
+    loadArrayBuffer(gl, colors, gl.program.aColor, 3, gl.FLOAT);
 
-    // Load the index data into the GPU
+    // Load the index data into the GPU.
+    indices = Uint16Array.from(indices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Uint16Array.from(indices), gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
     // Cleanup
     gl.bindVertexArray(null);
@@ -42,18 +59,18 @@ function loadModel(gl, coords, colors, indices, useStrips) {
 }
 
 /**
- * Creates and loads an array buffer into the GPU.
- * Then attaches it to a location and enables it.
- * values - an array of values to upload to the buffer.
+ * Creates and loads an array buffer into the GPU,
+ * attaches it to a location and enables it.
+ * data - an array of components to be uploaded to the buffer.
  * location - the location the buffer should attach to.
  * numComponents - the number of components per attribute.
  * numType - the type of the component.
  */
-function loadArrayBuffer(gl, values, location, numComponents, componentType) {
+function loadArrayBuffer(gl, data, location, numComponents, componentType) {
     const buf = gl.createBuffer();
     
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, values, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     gl.vertexAttribPointer(location, numComponents, componentType, false, 0, 0);
     gl.enableVertexAttribArray(location);
 
@@ -92,130 +109,146 @@ function loadCubeModel(gl) {
         0, 3, 7, 3, 4, 7,
     ];
 
-    return loadModel(gl, coords, colors, indices);
+    return loadModel(gl, coords, indices, { colors });
 }
 
-function loadModelFromWavefrontOBJ(gl, filename) {
+function loadModelFromWavefrontOBJ(gl, filename, options) {
     return fetch(filename)
         .then((r) => r.text())
-        .then((text) => parseWavefrontOBJ(gl, text));
+        .then((text) => _loadModelFromWavefrontOBJ(gl, text, options));
 }
 
-function parseWavefrontOBJ(gl, text) {
-    function filterEmptyStrings(arr) {
-        return arr.filter(x => x.match(/.+/) !== null);
+function _loadModelFromWavefrontOBJ(gl, text, options) {
+    if (typeof options === "undefined") {
+        options = {};
+    } else if (typeof options !== "object") {
+        throw new Error("Invalid argumenmt.");
     }
-    
-    let lines = text.split(/\n/);
+    const DEFAULTS = { colors: null, unpackColors: false };
+    options = Object.assign(DEFAULTS, options);
 
-    lines = filterEmptyStrings(lines);
-    
-    lines = lines.map(line => line.split(/\s/));
-    lines = lines.map(tokens => filterEmptyStrings(tokens));
-    lines = lines.filter(tokens => tokens.length !== 0);
-    
-    // filters comments
-    lines = lines.filter(tokens => tokens[0] !== "#");
+    const unpackColors = options.unpackColors === true;
 
-    const vertexPositions = [];
-    const vertexNormals = [];
-    const vertexUVs = [];
-    const newVertexPositions = [];
-    const newVertexNormals = [];
-    const newVertexUVs = [];
+    // Parse tokens from the wavefront obj text.
+    let lines;
+    {
+        const filterEmptyStrings = a => a.filter(x => x.match(/.+/) !== null);
+
+        // Split into lines
+        lines = text.split(/\n/);
+        lines = filterEmptyStrings(lines);
+        
+        // Split each line into tokens
+        lines = lines.map(line => line.split(/\s/));
+        lines = lines.map(tokens => filterEmptyStrings(tokens));
+        lines = lines.filter(tokens => tokens.length !== 0);
+        
+        // filter comments out
+        lines = lines.filter(tokens => tokens[0] !== "#");
+    }
+
+    const packedPositions = [];
+    const packedNormals = [];
+    const packedTexCoords = [];
+
+    const positions = [];
+    const normals = [];
+    const texCoords = [];
+
+    let colors;
+    if (unpackColors) {
+        colors = [];
+    } else if (options.colors !== null) {
+        colors = options.colors;
+    } else {
+        colors = null;
+    }
+
     const vertexMappings = [];
     const indices = []; // relative to vertex mappings
 
-    const tokensToNumbers = tokens => tokens.map(t => Number(t));
-    const pushAllNums = (arr, nums) => {
-        for (let i = 0; i < nums.length; ++i) {
-            arr.push(nums[i]);
+    const stringsToFloats = a => a.map(s => Number(s));
+
+    // Pushes every element in b onto a.
+    const pushArray = (a, b) => {
+        for (let i = 0; i < b.length; ++i) {
+            a.push(b[i]);
         }
     };
 
-    lines.forEach((tokens) => {
+    // Pushes a slice of b onto a.
+    const pushSliceOfArray = (a, b, startIndex, numComponents) => {
+        for (let i = 0; i < numComponents; ++i) {
+            const j = (startIndex * numComponents) + i;
+            a.push(b[j]);
+        }
+    }
+
+    // Load data from each line.
+    for (const tokens of lines) {
         const firstToken = tokens.shift();
 
-        if (firstToken === "v") {
+        if (firstToken === "v") { // position
             if (tokens.length !== 3) {
                 throw new Error("Invalid length.");
             }
 
-            const nums = tokensToNumbers(tokens);
-            pushAllNums(vertexPositions, nums);
-        } else if (firstToken === "vt") {
+            pushArray(packedPositions, stringsToFloats(tokens));
+        } else if (firstToken === "vt") { // texture coords
             if (tokens.length !== 2) {
                 throw new Error("Invalid length.");
             }
 
-            const nums = tokensToNumbers(tokens);
-            pushAllNums(vertexUVs, nums);
-        } else if (firstToken === "vn") {
+            pushArray(packedTexCoords, stringsToFloats(tokens));
+        } else if (firstToken === "vn") { // normals
             if (tokens.length !== 3) {
                 throw new Error("Invalid length.");
             }
             
-            const nums = tokensToNumbers(tokens);
-            pushAllNums(vertexNormals, nums);
+            pushArray(packedNormals, stringsToFloats(tokens));
         } else if (firstToken === "f") {
             if (tokens.length !== 3) {
                 throw new Error("Invalid length.");
             }
             
-            for (let i = 0; i < tokens.length; ++i) {
-                const token = tokens[i];
-
-                let index = vertexMappings.indexOf(token);
-                if (index === -1) {
-                    vertexMappings.push(token);
-                    index = vertexMappings.length - 1;
+            for (const mapping of tokens) {
+                let i = vertexMappings.indexOf(mapping);
+                if (i === -1) {
+                    vertexMappings.push(mapping);
+                    i = vertexMappings.length - 1;
                 }
 
-                indices.push(index);
+                indices.push(i);
             }
-        } else if (firstToken === "mtllib") {
+        } else if (firstToken === "mtllib") { // load .mtl material file
             // TODO
-        } else if (firstToken === "usemtl") {
+        } else if (firstToken === "usemtl") { // use material for this object
             // TODO
-        } else if (firstToken === "o") {
+        } else if (firstToken === "o") { // ?
             // TODO
-        } else if (firstToken === "s") {
+        } else if (firstToken === "s") { // ?
             // TODO
         } else {
             throw new Error("Invalid token: " + firstToken);
         }
+    }
 
+    // Unpack vertex attributes based on the mapping.
+    for (let mapping of vertexMappings) {
+        mapping = mapping.split(/\//);
+        mapping = mapping.map(x => Number(x) - 1);
+        let [posI, texCoordI, normalI] = mapping;
 
-    });
+        pushSliceOfArray(positions, packedPositions, posI, 3);
+        pushSliceOfArray(texCoords, packedTexCoords, texCoordI, 2);
+        pushSliceOfArray(normals, packedNormals, normalI, 3);
 
-    const pushNumsFromArray = (arr1, arr2, i, n) => {
-        for (let j = 0; j < n; ++j) {
-            arr1.push(arr2[(i * n) + j]);
+        if (unpackColors) {
+            pushSliceOfArray(colors, options.colors, posI, 3);
         }
     }
 
-    for (let i = 0; i < vertexMappings.length; ++i) {
-        const mapping = vertexMappings[i];
-        let [vi, vti, vni] = mapping.split(/\//).map(x => Number(x) - 1);
-
-        pushNumsFromArray(newVertexPositions, vertexPositions, vi, 3);
-        pushNumsFromArray(newVertexUVs, vertexUVs, vti, 2);
-        pushNumsFromArray(newVertexNormals, vertexNormals, vni, 3);
-    }
-
-    //console.log("vertexPositions: ", vertexPositions);
-    // console.log("vertexNormals: ", vertexNormals);
-    // console.log("vertexUVs: ", vertexUVs);
-    // console.log("newVertexPositions: ", newVertexPositions);
-    // console.log("newVertexNormals: ", newVertexNormals);
-    // console.log("newVertexUVs: ", newVertexUVs);
-    // console.log("vertexMappings: ", vertexMappings);
-    // console.log("indices: ", indices);
-
-    return loadModel(gl, newVertexPositions, null, indices);
+    return loadModel(gl, positions, indices, { normals, colors });
 }
 
-export {
-    loadCubeModel,
-    loadModelFromWavefrontOBJ
-};
+export { loadModelFromWavefrontOBJ };
