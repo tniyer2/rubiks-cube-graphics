@@ -1,4 +1,6 @@
 
+import { vec2, vec3 } from "./linearAlgebraUtils.js";
+
 /**
  * Create a quad tree.
  * model    - loaded model from createModel().
