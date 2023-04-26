@@ -21,6 +21,7 @@ import {
     KeyInputManager
 } from "./input.js";
 
+
 // Global WebGL context variable.
 let gl;
 
@@ -31,11 +32,11 @@ window.addEventListener("load", async function init() {
     // Get the canvas element.
     const canvas = document.getElementById("webgl-canvas");
     if (!canvas) { window.alert("Could not find #webgl-canvas"); return; }
+    GLB.canvasElm = canvas;
 
     // Get the WebGL context.
     gl = canvas.getContext("webgl2");
     if (!gl) { window.alert("WebGL isn't available"); return; }
-    GLB.canvasElm = canvas;
 
     // Configure WebGL.
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -182,6 +183,7 @@ function initProgram() {
  * Set the initial value of some uniforms.
  */
 function initUniforms() {
+    /*
     const convert = s => Float32Array.from(stringToColor(s));
     
     gl.uniform3fv(gl.program.uLightAmbient, convert("#ffffff"));
@@ -192,6 +194,7 @@ function initUniforms() {
     gl.uniform3fv(gl.program.uMaterialDiffuse, convert("#a00000"));
     gl.uniform3fv(gl.program.uMaterialSpecular, convert("#606060"));
     gl.uniform1f(gl.program.uMaterialShininess, 5);
+    */
 }
 
 /**
@@ -366,8 +369,8 @@ function onMouse(e, state, self) {
 
         // Rotate in view space.
         GLB.rubiksCube.localTransform = Mat4.multiply(
-            Mat4.create(), 
-            rot, 
+            Mat4.create(),
+            rot,
             self.startTransform
         );
     }
@@ -452,9 +455,40 @@ function render() {
 
 /** rotate a row or column of the cube when a key is pressed */
 function updateRubiksCubeTransform() {
-    const centerCube = SceneTreeNode("cube"); 
-    //let center_cube = mat4.create(); 
+    const rotations = [
+        "left", "xMiddle", "right",
+        "front", "zMiddle", "back",
+        "up", "yMiddle", "down"
+    ]
 
+    const rotationKeys = [
+        "l", "x", "r",
+        "f", "z", "b",
+        "u", "y", "d"
+    ];
+
+    const i = rotationKeys.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
+    const rotation = i === -1 ? null : rotations[i];
+
+    if (rotation) {
+        const [transformation, cubletIndices] = getRotationInfo(rotation);
+
+        for (const i of cubletIndices) {
+            const child = GLB.childrens.removeChildAt(i);
+        }
+
+        const radians = degreesToRadians(90);
+        const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
+        const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+        const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
+
+        GLB.temp.localTransform = transformation;
+    }
+
+    return centerCube;
+}
+
+function getRotationInfo(rotation) {
     // Define positions of little cubes relative to center of Rubik's cube
     const positions = [
         [-1, 1, -1], [0, 1, -1], [1, 1, -1],
@@ -469,50 +503,26 @@ function updateRubiksCubeTransform() {
         [-1, 0, 1], [0, 0, 1], [1, 0, 1],
         [-1, -1, 1], [0, -1, 1], [1, -1, 1],
     ];
+    
+    if ("left") {
 
-    // Create smaller cubes
-    for (let position in positions) {
-        const cublets = SceneTreeNode("cube");
-        cublets.scale = [0.2, 0.2, 0.2];
-        cublets.position = positions[position];
-        centerCube.addChild(cublets);
+    } else if ("xMiddle") {
+
+    } else if ("right") {
+
+    } else if ("front") {
+
+    } else if ("zMiddle") {
+
+    } else if ("back") {
+
+    } else if ("up") {
+
+    } else if ("yMiddle") {
+
+    } else if ("down") {
+
     }
-
-    // Add event listener for key press
-    document.addEventListener("keydown", event => {
-        if (event.key === "m") {
-            // Rotate the middle row by 90 degrees on the Y axis
-            console.log("rotate m")
-            const rotationAxis = [0, 1, 0];
-            const radians = degreesToRadians(90);
-            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
-            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
-            //GLB.rubiksCube.localTransform(transformedMatrix);
-        }
-
-        if (event.key === "n") {
-            // Rotate the middle column by 90 degrees on the X axis
-            const rotationAxis = [1, 0, 0];
-            const radians = degreesToRadians(90);
-            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
-            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
-            //GLB.rubiksCube.localTransform(transformedMatrix);
-        }
-
-        if (event.key === "b") {
-            // Rotate the middle column by 90 degrees on the Z axis
-            const rotationAxis = [0, 0, 1];
-            const radians = degreesToRadians(90);
-            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
-            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
-            //GLB.rubiksCube.localTransform(transformedMatrix);
-        }
-    });
-
-    return centerCube;
 }
 
 // Function to rotate the row containing the specified child cube
