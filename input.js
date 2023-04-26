@@ -7,26 +7,26 @@ const MOUSE_MOVE = "mousemove";
 const MOUSE_UP = "mouseup";
 const MOUSE_LEAVE = "mouseleave";
 
+const KEY_DOWN = "keydown";
+const KEY_UP = "keyup";
+
 /**
  * Implements functionality of clicking and dragging on a DOM element.
  * elm      the DOM element to click and drag on.
- * callback (event, dragState, self) => true if should enter drag
- *          dragState can be "enter", "drag", or "exit".
+ * callback (event, dragState, self) => bool (true if should enter drag)
+ *              dragState can be "enter", "drag", or "exit".
  * options
  *   .self                an object that gets passed to the callback.
  *   .exitOnLeave         true if should exit drag on "onmouseleave".
  *   .callDragOnMouseDown true if callback should be called with "drag" on "onmousedown".
  */
 function ClickAndDragHandler(elm, callback, options) {
-    // Initialize optional arguments with defaults.
-    {
-        const DEFAULTS = {
-            self: makeObj(),
-            callDragOnMouseDown: true,
-            exitOnLeave: true
-        };
-        options = initOptions(options, DEFAULTS);
-    }
+    const DEFAULTS = {
+        self: makeObj(),
+        callDragOnMouseDown: true,
+        exitOnLeave: true
+    };
+    options = initOptions(options, DEFAULTS);
 
     const callDragOnMouseDown = options.callDragOnMouseDown === true;
     const exitOnLeave = options.exitOnLeave === true;
@@ -45,8 +45,10 @@ function ClickAndDragHandler(elm, callback, options) {
         e.preventDefault();
         e.stopPropagation();
 
-        // prevents mousedown from being called after mousemove but before mouseup
-        // this can happen if you move cursor outside of element while drag is in action.
+        /*
+        Prevents mousedown from being called after mousemove but before mouseup.
+        This can happen if you move cursor outside of element while drag is in action.
+        */
         if (enteredDrag === true) {
             enteredDrag = false;
             exitDrag.call(this, e);
@@ -107,10 +109,10 @@ function ClickAndDragHandler(elm, callback, options) {
     }
 
     const obj = {
-        attach: () => {
+        attach: function () {
             set(MOUSE_DOWN, onMouseDown);
         },
-        detach: () => {
+        detach: function () {
             enteredDrag = false;
 
             unset(MOUSE_DOWN, onMouseDown);
@@ -119,13 +121,14 @@ function ClickAndDragHandler(elm, callback, options) {
             unset(MOUSE_LEAVE, onMouseLeave);
         }
     };
-    
+
     return obj;
 }
 
 /**
  * Convert x and y from window coordinates (in pixels)
  * relative to a canvas element to clip coordinates (-1,-1 to 1,1).
+ * Returns a Vec2.
  */
 function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
     return [
@@ -135,14 +138,15 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
 }
 
 /**
- * Creates an object that keeps track of key input.
+ * Keeps track of key input.
  */
 function KeyInputManager(elm) {
     const obj = {
-        state: Object.create(null),
-        allListeners: Object.create(null),
+        state: makeObj(),
+        allListeners: makeObj(),
         setKey: function (keyName, value) {
             this.state[keyName] = value;
+            
             this._callListeners(keyName, value);
         },
         isKeyDown: function (keyName) {
@@ -183,7 +187,7 @@ function KeyInputManager(elm) {
         }
     };
 
-    elm.addEventListener("keydown", function (e) {
+    elm.addEventListener(KEY_DOWN, function (e) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -192,7 +196,7 @@ function KeyInputManager(elm) {
         obj.setKey(e.key, true);
     });
 
-    elm.addEventListener("keyup", function (e) {
+    elm.addEventListener(KEY_UP, function (e) {
         e.preventDefault();
         e.stopPropagation();
 
