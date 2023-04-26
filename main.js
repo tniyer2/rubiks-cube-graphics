@@ -9,7 +9,7 @@ import {
     degreesToRadians, radiansToDegrees
 } from "./linearAlgebraUtils.js";
 
-import { createSceneTreeNode } from "./sceneTree.js";
+import { SceneTreeNode } from "./sceneTree.js";
 
 import { loadModelFromWavefrontOBJ } from "./models.js";
 
@@ -196,11 +196,11 @@ function initUniforms() {
  * Load all objects' models.
  */
 async function initGameWorld() {
-    GLB.world = createSceneTreeNode("world");
+    GLB.world = SceneTreeNode("world");
 
     // Create the camera.
     {
-        const camera = createSceneTreeNode("camera");
+        const camera = SceneTreeNode("camera");
         translateMat4(camera.localTransform, [0, 0, 4]);
 
         GLB.world.camera = camera;
@@ -209,12 +209,12 @@ async function initGameWorld() {
 
     // Create the Rubik's Cube Parent Objects.
     {
-        GLB.rubiksCube = createSceneTreeNode("empty");
+        GLB.rubiksCube = SceneTreeNode("empty");
         rotateMat4(GLB.rubiksCube.localTransform, 30, [1, 0, 0]);
         rotateMat4(GLB.rubiksCube.localTransform, 45, [0, 1, 0]);
 
-        GLB.childrens = createSceneTreeNode("empty");
-        GLB.temp = createSceneTreeNode("empty");
+        GLB.childrens = SceneTreeNode("empty");
+        GLB.temp = SceneTreeNode("empty");
 
         GLB.world.addChild(GLB.rubiksCube);
         GLB.rubiksCube.addChild(GLB.childrens);
@@ -247,7 +247,7 @@ async function initGameWorld() {
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
             for (let z = 0; z < 3; ++z) {
-                const cublet = createSceneTreeNode("model");
+                const cublet = SceneTreeNode("model");
 
                 const numAxesCentered = [x, y, z]
                     .map(axis => axis === 1 ? 1 : 0)
@@ -449,7 +449,7 @@ function render() {
 
 /** rotate a row or column of the cube when a key is pressed */
 function updateRubiksCubeTransform() {
-    const centerCube = createSceneTreeNode("cube"); 
+    const centerCube = SceneTreeNode("cube"); 
     //let center_cube = mat4.create(); 
 
     // Define positions of little cubes relative to center of Rubik's cube
@@ -469,7 +469,7 @@ function updateRubiksCubeTransform() {
 
     // Create smaller cubes
     for (let position in positions) {
-        const cublets = createSceneTreeNode("cube");
+        const cublets = SceneTreeNode("cube");
         cublets.scale = [0.2, 0.2, 0.2];
         cublets.position = positions[position];
         centerCube.addChild(cublets);

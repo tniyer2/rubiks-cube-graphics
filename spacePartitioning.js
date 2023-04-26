@@ -1,5 +1,5 @@
 
-import { isNumber } from "./type.js";
+import { isNumber, makeFilledArray } from "./type.js";
 import { Vec3 } from "./linearAlgebraUtils.js";
 import { lineSegTriangleIntersection } from "./tools.js";
 
@@ -39,7 +39,7 @@ function QuadTree(model, transform, origin, size, maxDepth) {
     function nodeToString(node) {
         let s = "";
 
-        s += `${node.depth}, ${node.splitsOnX ? "x" : "z"}, ${node.size}, [${node.origin[0]}, ${node.origin[2]}]\n`;
+        s += `${node.depth}, ${node.splitsOnX ? "x" : "z"}, ${node.size}, ${node.origin}\n`;
 
         if (node.leafs) {
             s += `${" ".repeat(node.depth-1)}  LEAFS: ${node.leafs.length}\n`;
@@ -57,7 +57,7 @@ function QuadTree(model, transform, origin, size, maxDepth) {
 // splitsOnX is false implies the node splits on the z-axis.
 function Node(splitsOnX, origin, size, depth, maxDepth) {
     const obj = {
-        splitsOnX, origin, size, depth, front: null, back: null
+        splitsOnX, origin, size, depth, maxDepth, front: null, back: null
     };
 
     if (depth === maxDepth) {
@@ -87,7 +87,7 @@ function Node(splitsOnX, origin, size, depth, maxDepth) {
     // Adds a triangle to the tree, possibly creating new nodes.
     obj._add = function (triangle) {
         // base case
-        if (this.depth === maxDepth) {
+        if (this.depth === this.maxDepth) {
             this.leafs.push(triangle);
             return;
         }
@@ -175,7 +175,7 @@ function Node(splitsOnX, origin, size, depth, maxDepth) {
     };
 
     obj.checkCollision = function (model, transform) {
-        if (this.depth === maxDepth &&
+        if (this.depth === this.maxDepth &&
             this._doesAnyLeafCollide(model, transform)) {
             return true;
         }
@@ -203,13 +203,12 @@ function Node(splitsOnX, origin, size, depth, maxDepth) {
 }
 
 /**
- * Returns a 2D Axis Aligned Bounding Box for a 3D model.
- * Only the X and Z axes are looked at.
- * The bounding box is defined by a min and max Vec3.
+ * Returns an axis aligned bounding box for a model,
+ * represented by an object with a min and max Vec3.
  */
 function AxisAlignedBoundingBox(model, transform) {
-    let min = [Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE];
-    let max = [Number.MIN_VALUE, Number.MIN_VALUE, Number.MIN_VALUE];
+    let min = makeFilledArray(3, Number.MAX_VALUE);
+    let max = makeFilledArray(3, Number.MIN_VALUE);
 
     // Iterate through every point in model.
     for (let i = 0; i < model.coords.length; i += 3) {
@@ -233,4 +232,4 @@ function AxisAlignedBoundingBox(model, transform) {
     return { min, max };
 }
 
-export { QuadTree, AxisAlignedBoundingBox as XZAxisAlignedBoundingBox };
+export { QuadTree, AxisAlignedBoundingBox };

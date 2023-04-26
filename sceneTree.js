@@ -2,11 +2,11 @@
 import { Mat4 } from "./linearAlgebraUtils.js";
 
 /**
- * Creates a default scene tree node.
+ * A node in a scene tree.
  */
-function createSceneTreeNode(type) {
-    let obj = {
-        type: type,
+function SceneTreeNode(type) {
+    const obj = {
+        type,
         localTransform: Mat4.identity(Mat4.create()),
         parent: null,
         children: []
@@ -24,7 +24,7 @@ function createSceneTreeNode(type) {
     Object.defineProperty(obj, "transform", {
         get: function () {
             if (this.parent === null) {
-                return this.localTransform;
+                return Mat4.clone(this.localTransform);
             } else {
                 const t = Mat4.multiply(
                     Mat4.create(),
@@ -39,4 +39,4 @@ function createSceneTreeNode(type) {
     return obj;
 }
 
-export { createSceneTreeNode };
+export { SceneTreeNode };
