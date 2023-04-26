@@ -6,7 +6,7 @@ const Vec3 = glMatrix.vec3;
 const Quat = glMatrix.quat;
 const Mat4 = glMatrix.mat4;
 
-// Translates a mat4 by a vec3.
+// Translates a Mat4 by a Vec3.
 function translateMat4(matrix, v) {
     if (isNumber(v)) {
         v = [v, v, v];
@@ -17,7 +17,7 @@ function translateMat4(matrix, v) {
     return Mat4.multiply(matrix, matrix, t);
 }
 
-// Scales a mat4 by a vec3.
+// Scales a Mat4 by a Vec3.
 function scaleMat4(matrix, v) {
     if (isNumber(v)) {
         v = [v, v, v];
@@ -28,7 +28,7 @@ function scaleMat4(matrix, v) {
     return Mat4.multiply(matrix, matrix, s);
 }
 
-// Rotates a mat4 by an angle around an axis.
+// Rotates a Mat4 by an angle around an axis.
 function rotateMat4(matrix, angle, axis) {
     const r = angleAxisToMat4(angle, axis);
 
@@ -38,7 +38,7 @@ function rotateMat4(matrix, angle, axis) {
 /**
  * Returns a quaternion (Quat) converted from the angle and axis.
  * angle - angle in degrees.
- * axis  - a vec3 representing a direction.
+ * axis  - a Vec3 representing a direction.
  */
 function angleAxisToQuat(angle, axis) {
     angle = degreesToRadians(angle);

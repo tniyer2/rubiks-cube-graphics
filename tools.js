@@ -1,4 +1,7 @@
 
+import { makeFilledArray } from "./type.js";
+import { Vec3 } from "./linearAlgebraUtils.js";
+
 /**
  * Load a texture onto the GPU. The image must be power-of-two sized image using RGBA with uint8
  * values. The image will be flipped vertically and will support mipmapping.
@@ -53,6 +56,39 @@ function loadCubemapTexture(gl, xp, xn, yp, yn, zp, zn, idx) {
     return texture;
 }
 
+const _temps = makeFilledArray(7, () => Vec3.create());
+
+/**
+ * Finds the intersection between a line segment and a triangle. The line segment is given by a
+ * point (p) and vector (vec). The triangle is given by three points (abc). If there is no
+ * intersection, the line segment is parallel to the plane of the triangle, or the triangle is
+ * degenerate then null is returned. Otherwise a vec4 is returned that contains the intersection.
+ *
+ * Each argument must be a vec3 (i.e. 3 element array).
+ */
+function lineSegTriangleIntersection(p, vec, a, b, c) {
+    let [u, v] = [Vec3.subtract(_temps[0], b, a), Vec3.subtract(_temps[1], c, a)]; // triangle edge vectors
+    let uu = Vec3.dot(u, u), vv = Vec3.dot(v, v), uv = Vec3.dot(u, v);
+    let tri_scale = uv*uv-uu*vv;
+    if (tri_scale === 0) { return null; } // triangle is degenerate
+    let n = Vec3.cross(_temps[2], u, v); // normal vector of the triangle
+
+    // Find the point where the line intersects the plane of the triangle
+    let denom = Vec3.dot(n, vec);
+    if (denom === 0) { return null; } // line segment is parallel to the plane of the triangle
+    let rI = Vec3.dot(n, Vec3.subtract(_temps[3], a, p)) / denom;
+    if (rI < 0 || rI > 1) { return null; } // line segment does not intersect the plane of the triangle
+    p = Vec3.add(_temps[4], p, Vec3.scale(_temps[5], vec, rI)); // the point where the line segment intersects the plane of the triangle
+
+    // Check if the point of intersection lies within the triangle
+    let w = Vec3.subtract(_temps[6], p, a), wv = Vec3.dot(w, v), wu = Vec3.dot(w, u);
+    let sI = (uv*wv-vv*wu)/tri_scale, tI = (uv*wu-uu*wv)/tri_scale;
+    if (sI < 0 || tI < 0 || sI + tI > 1) { return null; } // intersection point is outside of the triangle
+
+    // Return the intersection
+    return p;
+}
+
 /**
  * Calculates the normals for the vertices given an array of vertices and array of indices to look
  * up into. The triangles are full triangles and not triangle strips.
@@ -105,4 +141,4 @@ function calcNormals(coords, indices, is_tri_strip) {
     return normals;
 }
 
-export { calcNormals, loadTexture, loadCubemapTexture };
+export { lineSegTriangleIntersection, calcNormals, loadTexture, loadCubemapTexture };

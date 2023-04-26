@@ -15,4 +15,14 @@ function makeObj() {
     return Object.create(null);
 }
 
-export { isUdf, isNumber, isObject, makeObj };
+function makeFilledArray(length, createElement) {
+    const a = [];
+    
+    for (let i = 0; i < length; ++i) {
+        a[i] = createElement(i);
+    }
+
+    return a;
+}
+
+export { isUdf, isNumber, isObject, makeObj, makeFilledArray };
