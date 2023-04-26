@@ -9,6 +9,8 @@ import {
     degreesToRadians, radiansToDegrees
 } from "./linearAlgebraUtils.js";
 
+import { stringToColor } from "./tools.js";
+
 import { SceneTreeNode } from "./sceneTree.js";
 
 import { loadModelFromWavefrontOBJ } from "./models.js";
@@ -18,7 +20,6 @@ import {
     windowToClipSpace,
     KeyInputManager
 } from "./input.js";
-
 
 // Global WebGL context variable.
 let gl;
@@ -181,13 +182,15 @@ function initProgram() {
  * Set the initial value of some uniforms.
  */
 function initUniforms() {
-    gl.uniform3fv(gl.program.uLightAmbient, stringToColorFloat32("#ffffff"));
-    gl.uniform3fv(gl.program.uLightDiffuse, stringToColorFloat32("#ffffff"));
-    gl.uniform3fv(gl.program.uLightSpecular, stringToColorFloat32("#ffffff"));
+    const convert = s => Float32Array.from(stringToColor(s));
+    
+    gl.uniform3fv(gl.program.uLightAmbient, convert("#ffffff"));
+    gl.uniform3fv(gl.program.uLightDiffuse, convert("#ffffff"));
+    gl.uniform3fv(gl.program.uLightSpecular, convert("#ffffff"));
 
-    gl.uniform3fv(gl.program.uMaterialAmbient, stringToColorFloat32("#330000"));
-    gl.uniform3fv(gl.program.uMaterialDiffuse, stringToColorFloat32("#a00000"));
-    gl.uniform3fv(gl.program.uMaterialSpecular, stringToColorFloat32("#606060"));
+    gl.uniform3fv(gl.program.uMaterialAmbient, convert("#330000"));
+    gl.uniform3fv(gl.program.uMaterialDiffuse, convert("#a00000"));
+    gl.uniform3fv(gl.program.uMaterialSpecular, convert("#606060"));
     gl.uniform1f(gl.program.uMaterialShininess, 5);
 }
 
@@ -407,7 +410,7 @@ function onMouse(e, state, self) {
  * Runs all tasks for a single frame.
  */
 function runFrame() {
-    updateRubiksCubeTransform();
+    // updateRubiksCubeTransform();
 
     render();
 
@@ -543,16 +546,4 @@ function rotateRowContainingChild(child) {
         const transformedMatrix = Mat4.multiply(Mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     }
-}
-
-function stringToColor(str) {
-    return [
-        parseInt(str.substr(1, 2), 16) / 255.0,
-        parseInt(str.substr(3, 2), 16) / 255.0,
-        parseInt(str.substr(5, 2), 16) / 255.0
-    ];
-}
-
-function stringToColorFloat32(str) {
-    return Float32Array.from(stringToColor(str));
 }

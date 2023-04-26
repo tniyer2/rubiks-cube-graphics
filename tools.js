@@ -2,6 +2,14 @@
 import { makeFilledArray } from "./utils.js";
 import { Vec3 } from "./linearAlgebraUtils.js";
 
+function stringToColor(str) {
+    return [
+        parseInt(str.substr(1, 2), 16) / 255.0,
+        parseInt(str.substr(3, 2), 16) / 255.0,
+        parseInt(str.substr(5, 2), 16) / 255.0
+    ];
+}
+
 /**
  * Load a texture onto the GPU. The image must be power-of-two sized image using RGBA with uint8
  * values. The image will be flipped vertically and will support mipmapping.
@@ -141,4 +149,9 @@ function calcNormals(coords, indices, is_tri_strip) {
     return normals;
 }
 
-export { lineSegTriangleIntersection, calcNormals, loadTexture, loadCubemapTexture };
+export {
+    stringToColor,
+    loadTexture, loadCubemapTexture,
+    lineSegTriangleIntersection,
+    calcNormals
+};
