@@ -1,29 +1,43 @@
 
+import { initOptions } from "./utils.js";
+import { makeObj } from "./type.js";
+
+const MOUSE_DOWN = "mousedown";
+const MOUSE_MOVE = "mousemove";
+const MOUSE_UP = "mouseup";
+const MOUSE_LEAVE = "mouseleave";
+
 /**
- * Implements all of the click and drag functionality.
- * Returning true in the callback will enable dragging
- * after a mousedown event.
- * @param {*} elm the DOM element to click and drag on.
- * @param {*} callback gets called on every mousedown, mousemove, and mouseup.
- * @param {*} options.self an object that gets passed to the callback.
- * @param {*} options.exitOnLeave should exit drag on 'onmouseleave'.
- * @param {*} options.callDragOnEnter should exit drag on 'onmouseleave'.
- * @returns the mouse handler object.
+ * Implements functionality of clicking and dragging on a DOM element.
+ * elm      the DOM element to click and drag on.
+ * callback (event, dragState, self) => true if should enter drag
+ *          dragState can be "enter", "drag", or "exit".
+ * options
+ *   .self                an object that gets passed to the callback.
+ *   .exitOnLeave         true if should exit drag on "onmouseleave".
+ *   .callDragOnMouseDown true if callback should be called with "drag" on "onmousedown".
  */
-function createMouseHandler(elm, callback, options) {
-    if (typeof options === "undefined" || options == null) {
-        options = {};
-    } else if (typeof options !== "object") {
-        throw new Error("Invalid argument.")
-    }
+function ClickAndDragHandler(elm, callback, options) {
+    // Initialize optional arguments with defaults.
     {
-        const defaults = {
-            self: {},
-            callDragOnEnter: true,
+        const DEFAULTS = {
+            self: makeObj(),
+            callDragOnMouseDown: true,
             exitOnLeave: true
         };
-        options = Object.assign(defaults, options);
+        options = initOptions(options, DEFAULTS);
     }
+
+    const callDragOnMouseDown = options.callDragOnMouseDown === true;
+    const exitOnLeave = options.exitOnLeave === true;
+
+    // Enables and disables event listeners.
+    const set = (t, l) => elm.addEventListener(t, l);
+    const unset = (t, l) => elm.removeEventListener(t, l);
+
+    const ENTER_STATE = "enter";
+    const DRAG_STATE = "drag";
+    const EXIT_STATE = "exit";
 
     let enteredDrag = false;
 
@@ -41,39 +55,11 @@ function createMouseHandler(elm, callback, options) {
         }
     }
 
-    function exitDrag(e) {
-        enteredDrag = false;
-        
-        elm.removeEventListener("mousemove", onMouseMove);
-        elm.removeEventListener("mouseup", onMouseUp);
-        elm.removeEventListener("mouseleave", onMouseLeave);
-        elm.addEventListener("mousedown", onMouseDown);
-
-        callback.call(this, e, "exit", options.self);
-    }
-
-    function enterDrag(e) {
-        const shouldEnterDrag = callback.call(this, e, "enter", options.self);
-
-        if (shouldEnterDrag === true) {
-            enteredDrag = true;
-
-            elm.removeEventListener("mousedown", onMouseDown)
-            elm.addEventListener("mousemove", onMouseMove);
-            elm.addEventListener("mouseup", onMouseUp);
-            elm.addEventListener("mouseleave", onMouseLeave);
-
-            if (options.callDragOnEnter) {
-                callback.call(this, e, "drag", options.self);
-            }
-        }
-    }
-
     function onMouseMove(e) {
         e.preventDefault();
         e.stopPropagation();
 
-        callback.call(this, e, "drag", options.self);
+        callback.call(this, e, DRAG_STATE, options.self);
     }
 
     function onMouseUp(e) {
@@ -87,24 +73,54 @@ function createMouseHandler(elm, callback, options) {
         e.preventDefault();
         e.stopPropagation();
 
-        if (options.exitOnLeave) {
+        if (exitOnLeave) {
             exitDrag.call(this, e);
         }
     }
 
-    return {
+    function exitDrag(e) {
+        enteredDrag = false;
+        
+        unset(MOUSE_MOVE, onMouseMove);
+        unset(MOUSE_UP, onMouseUp);
+        unset(MOUSE_LEAVE, onMouseLeave);
+        set(MOUSE_DOWN, onMouseDown);
+
+        callback.call(this, e, EXIT_STATE, options.self);
+    }
+
+    function enterDrag(e) {
+        const shouldEnterDrag = callback.call(this, e, ENTER_STATE, options.self);
+
+        if (shouldEnterDrag === true) {
+            enteredDrag = true;
+
+            unset(MOUSE_DOWN, onMouseDown)
+            set(MOUSE_MOVE, onMouseMove);
+            set(MOUSE_UP, onMouseUp);
+            set(MOUSE_LEAVE, onMouseLeave);
+
+            if (callDragOnMouseDown) {
+                callback.call(this, e, DRAG_STATE, options.self);
+            }
+        }
+    }
+
+    const obj = {
         attach: () => {
-            elm.addEventListener("mousedown", onMouseDown);
+            set(MOUSE_DOWN, onMouseDown);
         },
         detach: () => {
             enteredDrag = false;
 
-            elm.removeEventListener("mousedown", onMouseDown);
-            elm.removeEventListener("mousemove", onMouseMove);
-            elm.removeEventListener("mouseup", onMouseUp);
-            elm.removeEventListener("mouseleave", onMouseLeave);
-        },
-    }
+            unset(MOUSE_DOWN, onMouseDown);
+            unset(MOUSE_MOVE, onMouseMove);
+            unset(MOUSE_UP, onMouseUp);
+            unset(MOUSE_LEAVE, onMouseLeave);
+        }
+    };
+    
+    return obj;
 }
 
 /**
@@ -121,7 +137,7 @@ function windowToClipSpace(x, y, canvasWidth, canvasHeight) {
 /**
  * Creates an object that keeps track of key input.
  */
-function createKeyInputManager(elm) {
+function KeyInputManager(elm) {
     const obj = {
         state: Object.create(null),
         allListeners: Object.create(null),
@@ -186,4 +202,4 @@ function createKeyInputManager(elm) {
     return obj;
 }
 
-export { createMouseHandler, windowToClipSpace, createKeyInputManager };
+export { ClickAndDragHandler, windowToClipSpace, KeyInputManager };

@@ -1,4 +1,6 @@
 
+import { calcNormals } from "./tools.js";
+
 /**
  * Loads a model into GPU with the coordinates and indices provided.
  * Other data can optionally passed through options.
@@ -27,7 +29,7 @@ function loadModel(gl, coords, indices, options) {
     if (options.normals !== null) {
         normals = Float32Array.from(options.normals);
     } else {
-        normals = calc_normals(coords, indices, useStrips);
+        normals = calcNormals(coords, indices, useStrips);
     }
     loadArrayBuffer(gl, normals, gl.program.aNormal, 3, gl.FLOAT);
 
@@ -251,4 +253,4 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
     return loadModel(gl, positions, indices, { normals, colors });
 }
 
-export { loadModelFromWavefrontOBJ };
+export { loadCubeModel, loadModelFromWavefrontOBJ };

@@ -1,5 +1,5 @@
 
-import { vec2, vec3 } from "./linearAlgebraUtils.js";
+import { Vec2, Vec3 } from "./linearAlgebraUtils.js";
 
 /**
  * Create a quad tree.
@@ -28,13 +28,13 @@ function createQuadTree(model, modelTransform, origin_, size_, maxDepth) {
 
             const notAxis = this.isXAxis ? 1 : 0;
 
-            let newSize = vec2.clone(this.size);
+            let newSize = Vec2.clone(this.size);
             newSize[notAxis] /= 2;
 
             const delta = (isFront ? 1 : -1) * (newSize[notAxis] / 2);
             const deltaVec = this.isXAxis ? [0, 0, delta] : [delta, 0, 0];
 
-            const newOrigin = vec3.add(vec3.create(), this.origin, deltaVec);
+            const newOrigin = Vec3.add(Vec3.create(), this.origin, deltaVec);
 
             const node = createNode(!this.isXAxis, newOrigin, newSize, this.depth+1);
 
@@ -111,19 +111,19 @@ function createQuadTree(model, modelTransform, origin_, size_, maxDepth) {
         node._doesAnyLeafCollide = function (otherModel, otherTransform) {
             for (let i = 0; i < otherModel.coords.length; i += 9) {
                 let a = otherModel.coords.subarray(i, i+3);
-                a = vec3.transformMat4(vec3.create(), a, otherTransform);
+                a = Vec3.transformMat4(Vec3.create(), a, otherTransform);
                 
                 let b = otherModel.coords.subarray(i+3, i+6);
-                b = vec3.transformMat4(vec3.create(), b, otherTransform);
+                b = Vec3.transformMat4(Vec3.create(), b, otherTransform);
 
                 let c = otherModel.coords.subarray(i+6, i+9);
-                c = vec3.transformMat4(vec3.create(), c, otherTransform);
+                c = Vec3.transformMat4(Vec3.create(), c, otherTransform);
 
                 for (let leaf of this.leafs) {
                     for (let i = 0; i < 3; ++i) {
                         const p1 = leaf[i];
                         const p2 = leaf[(i+1)%3];
-                        const v = vec3.subtract(vec3.create(), p2, p1);
+                        const v = Vec3.subtract(Vec3.create(), p2, p1);
 
                         const intersection = line_seg_triangle_intersection(p1, v, a, b, c);
 
@@ -172,9 +172,9 @@ function createQuadTree(model, modelTransform, origin_, size_, maxDepth) {
         let b = model.coords.subarray(i+3, i+6);
         let c = model.coords.subarray(i+6, i+9);
 
-        a = vec3.transformMat4(vec3.create(), a, modelTransform);
-        b = vec3.transformMat4(vec3.create(), b, modelTransform);
-        c = vec3.transformMat4(vec3.create(), c, modelTransform);
+        a = Vec3.transformMat4(Vec3.create(), a, modelTransform);
+        b = Vec3.transformMat4(Vec3.create(), b, modelTransform);
+        c = Vec3.transformMat4(Vec3.create(), c, modelTransform);
 
         const triangle = [a, b, c];
 
@@ -216,7 +216,7 @@ function getAxisAlignedXZBoundingBox(model, transform) {
 
     for (let i = 0; i < model.coords.length; i += 3) {
         let point = model.coords.subarray(i, i+3);
-        point = vec3.transformMat4(vec3.create(), point, transform);
+        point = Vec3.transformMat4(Vec3.create(), point, transform);
 
         if (point[0] < minX) {
             minX = point[0];

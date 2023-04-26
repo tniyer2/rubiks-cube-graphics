@@ -1,5 +1,5 @@
 
-import { mat4 } from "./linearAlgebraUtils.js";
+import { Mat4 } from "./linearAlgebraUtils.js";
 
 /**
  * Creates a default scene tree node.
@@ -7,7 +7,7 @@ import { mat4 } from "./linearAlgebraUtils.js";
 function createSceneTreeNode(type) {
     let obj = {
         type: type,
-        localTransform: mat4.identity(mat4.create()),
+        localTransform: Mat4.identity(Mat4.create()),
         parent: null,
         children: []
     };
@@ -26,8 +26,8 @@ function createSceneTreeNode(type) {
             if (this.parent === null) {
                 return this.localTransform;
             } else {
-                const t = mat4.multiply(
-                    mat4.create(),
+                const t = Mat4.multiply(
+                    Mat4.create(),
                     this.parent.transform,
                     this.localTransform
                 );

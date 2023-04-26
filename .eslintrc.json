@@ -8,6 +8,10 @@
         // gl-matrix exports
         "glMatrix": "readonly"
     },
+    "parserOptions": {
+        "ecmaVersion": 11,
+        "sourceType": "module"
+    },
     "rules": {
         "brace-style": ["error", "1tbs", { "allowSingleLine": true }],
         "consistent-return": "error",

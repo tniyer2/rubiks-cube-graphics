@@ -3,7 +3,7 @@
 "use strict";
 
 import {
-    vec2, vec3, mat4,
+    Vec2, Mat4,
     translateMat4, scaleMat4, rotateMat4,
     angleAxisToMat4,
     degreesToRadians, radiansToDegrees
@@ -14,9 +14,9 @@ import { createSceneTreeNode } from "./sceneTree.js";
 import { loadModelFromWavefrontOBJ } from "./models.js";
 
 import {
-    createMouseHandler,
+    ClickAndDragHandler,
     windowToClipSpace,
-    createKeyInputManager
+    KeyInputManager
 } from "./input.js";
 
 
@@ -271,9 +271,9 @@ async function initGameWorld() {
 function initEvents() {
     window.addEventListener("resize", onWindowResize);
 
-    GLB.keyInput = createKeyInputManager(window);
+    GLB.keyInput = KeyInputManager(window);
 
-    const handler = createMouseHandler(GLB.canvasElm, onMouse);
+    const handler = ClickAndDragHandler(GLB.canvasElm, onMouse);
     handler.attach();
 }
 
@@ -296,7 +296,7 @@ function onWindowResize() {
 function updateProjectionMatrix() {
     let [w, h] = [gl.canvas.width, gl.canvas.height];
 
-    const proj = mat4.perspective(mat4.create(), degreesToRadians(90), w / h, 0.0001, 1000);
+    const proj = Mat4.perspective(Mat4.create(), degreesToRadians(90), w / h, 0.0001, 1000);
 
     // orthographic for debugging
     // const proj = mat4.ortho(mat4.create(), -2, 2, -2, 2, 1000, -1000);
@@ -339,7 +339,7 @@ function onMouse(e, state, self) {
 
             rot = angleAxisToMat4(angle, [0, 0, 1]);
         } else {
-            const diff = vec2.subtract(vec2.create(), self.mousePos, self.startMousePos);
+            const diff = Vec2.subtract(Vec2.create(), self.mousePos, self.startMousePos);
             const [x, y] = diff;
 
             const baseSpeed = 100;
@@ -357,13 +357,13 @@ function onMouse(e, state, self) {
             if (lockAxis) {
                 rot = Math.abs(x) >= Math.abs(y) ? rotX : rotY;
             } else {
-                rot = mat4.multiply(mat4.create(), rotX, rotY);
+                rot = Mat4.multiply(Mat4.create(), rotX, rotY);
             }
         }
 
         // Rotate in view space.
-        GLB.rubiksCube.localTransform = mat4.multiply(
-            mat4.create(), 
+        GLB.rubiksCube.localTransform = Mat4.multiply(
+            Mat4.create(), 
             rot, 
             self.startTransform
         );
@@ -482,9 +482,9 @@ function updateRubiksCubeTransform() {
             console.log("rotate m")
             const rotationAxis = [0, 1, 0];
             const radians = degreesToRadians(90);
-            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
-            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
+            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
             //GLB.rubiksCube.localTransform(transformedMatrix);
         }
 
@@ -492,9 +492,9 @@ function updateRubiksCubeTransform() {
             // Rotate the middle column by 90 degrees on the X axis
             const rotationAxis = [1, 0, 0];
             const radians = degreesToRadians(90);
-            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
-            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
+            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
             //GLB.rubiksCube.localTransform(transformedMatrix);
         }
 
@@ -502,9 +502,9 @@ function updateRubiksCubeTransform() {
             // Rotate the middle column by 90 degrees on the Z axis
             const rotationAxis = [0, 0, 1];
             const radians = degreesToRadians(90);
-            const rotationMatrix = mat4.fromRotation(mat4.create(), radians, rotationAxis);
-            const translatedMatrix = mat4.translate(mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
-            const transformedMatrix = mat4.multiply(mat4.create(), rotationMatrix, translatedMatrix);
+            const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);
+            const translatedMatrix = Mat4.translate(Mat4.create(), GLB.rubiksCube.localTransform, [0, 0, 0]);
+            const transformedMatrix = Mat4.multiply(Mat4.create(), rotationMatrix, translatedMatrix);
             //GLB.rubiksCube.localTransform(transformedMatrix);
         }
     });
@@ -531,16 +531,16 @@ function rotateRowContainingChild(child) {
     if (rowIndex === 0 || rowIndex === 2) {
         // Row is oriented along the X axis
         const radians = degreesToRadians(90);
-        const rotationMatrix = mat4.fromXRotation(mat4.create(), radians);
-        const translationMatrix = mat4.translate(mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
-        const transformedMatrix = mat4.multiply(mat4.create(), translationMatrix, rotationMatrix);
+        const rotationMatrix = Mat4.fromXRotation(Mat4.create(), radians);
+        const translationMatrix = Mat4.translate(Mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
+        const transformedMatrix = Mat4.multiply(Mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     } else {
         // Row is oriented along the Z axis
         const radians = degreesToRadians(90);
-        const rotationMatrix = mat4.fromZRotation(mat4.create(), radians);
-        const translationMatrix = mat4.translate(mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
-        const transformedMatrix = mat4.multiply(mat4.create(), translationMatrix, rotationMatrix);
+        const rotationMatrix = Mat4.fromZRotation(Mat4.create(), radians);
+        const translationMatrix = Mat4.translate(Mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
+        const transformedMatrix = Mat4.multiply(Mat4.create(), translationMatrix, rotationMatrix);
         parent.setLocalTransform(transformedMatrix);
     }
 }

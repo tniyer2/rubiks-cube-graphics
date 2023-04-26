@@ -1,30 +1,27 @@
-// Various useful functions - feel free to add additional functions to this file (or other files)
-/* exported calc_normals, loadTexture, loadCubemapTexture, logXTimes, logOnce */
 
 /**
  * Load a texture onto the GPU. The image must be power-of-two sized image using RGBA with uint8
  * values. The image will be flipped vertically and will support mipmapping.
  */
 function loadTexture(gl, img, idx) {
-	if (typeof idx === "undefined") { idx = 0; }
+    if (typeof idx === "undefined") { idx = 0; }
 
-	let texture = gl.createTexture(); // create a texture resource on the GPU
-	gl.activeTexture(gl['TEXTURE'+idx]); // set the current texture that all following commands will apply to
-	gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
+    let texture = gl.createTexture(); // create a texture resource on the GPU
+    gl.activeTexture(gl['TEXTURE'+idx]); // set the current texture that all following commands will apply to
+    gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
 
-	// Load the image data into the texture
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    // Load the image data into the texture
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
-	// Setup options for downsampling and upsampling the image data
-	gl.generateMipmap(gl.TEXTURE_2D);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // Setup options for downsampling and upsampling the image data
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-	// Cleanup and return
-	gl.bindTexture(gl.TEXTURE_2D, null);
-	return texture;
+    // Cleanup and return
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return texture;
 }
-
 
 /**
  * Load a texture onto the GPU as a cube-map texture. The images must be power-of-two sized image
@@ -56,7 +53,6 @@ function loadCubemapTexture(gl, xp, xn, yp, yn, zp, zn, idx) {
     return texture;
 }
 
-
 /**
  * Calculates the normals for the vertices given an array of vertices and array of indices to look
  * up into. The triangles are full triangles and not triangle strips.
@@ -68,7 +64,7 @@ function loadCubemapTexture(gl, xp, xn, yp, yn, zp, zn, idx) {
  * Returns:
  *    Float32Array of the normals with 3 values per vertex
  */
-function calc_normals(coords, indices, is_tri_strip) {
+function calcNormals(coords, indices, is_tri_strip) {
     const vec3 = glMatrix.vec3;
 
     if (is_tri_strip !== true && is_tri_strip !== false) { is_tri_strip = true; }
@@ -109,24 +105,4 @@ function calc_normals(coords, indices, is_tri_strip) {
     return normals;
 }
 
-const TIMES_LOGGED = {};
-
-function logXTimes(key, numTimes, ...args) {
-    if (numTimes === null) {
-        console.log(...args);
-        return;
-    }
-
-    if (!(key in TIMES_LOGGED)) {
-        TIMES_LOGGED[key] = 0;
-    }
-
-    if (TIMES_LOGGED[key] < numTimes) {
-        TIMES_LOGGED[key] += 1;
-        console.log(...args);
-    }
-}
-
-function logOnce(key, ...args) {
-    logXTimes(key, 1, ...args);
-}
+export { calcNormals, loadTexture, loadCubemapTexture };
