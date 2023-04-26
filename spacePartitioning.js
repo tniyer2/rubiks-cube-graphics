@@ -1,5 +1,6 @@
 
-import { isNumber, makeFilledArray } from "./type.js";
+import { isNumber } from "./type.js";
+import { makeFilledArray } from "./utils.js"
 import { Vec3 } from "./linearAlgebraUtils.js";
 import { lineSegTriangleIntersection } from "./tools.js";
 

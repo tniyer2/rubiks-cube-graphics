@@ -1,4 +1,5 @@
 
+import { makeFilledArray, concat, concatSlice, initOptions } from "./utils.js";
 import { calcNormals } from "./tools.js";
 
 /**
@@ -6,15 +7,18 @@ import { calcNormals } from "./tools.js";
  * Other data can optionally passed through options.
  */
 function loadModel(gl, coords, indices, options) {
-    if (typeof options === "undefined") {
-        options = {};
-    } else if (typeof options !== "object") {
-        throw new Error("Invalid argumenmt.");
-    }
-    const DEFAULTS = { colors: null, texCoords: null, normals: null, useStrips: false };
-    options = Object.assign(DEFAULTS, options);
+    const DEFAULTS = {
+        colors: null,
+        defaultColor: [0, 1, 0], // Green
+        texCoords: null,
+        normals: null,
+        useStrips: false,
+        keepCoordsInMemory: false
+    };
+    options = initOptions(options, DEFAULTS);
 
     const useStrips = options.useStrips === true;
+    const keepCoordsInMemory = options.keepCoordsInMemory === true;
 
     // Create and bind VAO.
     const vao = gl.createVertexArray();
@@ -36,11 +40,13 @@ function loadModel(gl, coords, indices, options) {
     // Load vertex colors into GPU.
     let colors = options.colors;
     if (colors === null) {
-        const GREEN = [0, 1, 0];
-        colors = Array(coords.length / 3).fill().flatMap(() => GREEN);
+        colors = makeFilledArray(coords.length / 3, options.defaultColor);
+        colors = colors.flat();
     }
     colors = Float32Array.from(colors);
     loadArrayBuffer(gl, colors, gl.program.aColor, 3, gl.FLOAT);
+
+    // TODO: load texCoords into GPU.
 
     // Load the index data into the GPU.
     indices = Uint16Array.from(indices);
@@ -55,18 +61,22 @@ function loadModel(gl, coords, indices, options) {
     const count = indices.length;
     const mode = useStrips ? gl.TRIANGLE_STRIP : gl.TRIANGLES;
 
-    const object = { vao, count, mode, coords };
+    const model = { vao, count, mode };
 
-    return object;
+    if (keepCoordsInMemory) {
+        model.coords = coords;
+    }
+
+    return model;
 }
 
 /**
- * Creates and loads an array buffer into the GPU,
+ * Creates and loads an array buffer into the GPU and
  * attaches it to a location and enables it.
- * data - an array of components to be uploaded to the buffer.
- * location - the location the buffer should attach to.
+ * data          - a typed array to be uploaded to the buffer.
+ * location      - the location the buffer should attach to.
  * numComponents - the number of components per attribute.
- * numType - the type of the component.
+ * componentType - the type of the component. (matches type of data)
  */
 function loadArrayBuffer(gl, data, location, numComponents, componentType) {
     const buf = gl.createBuffer();
@@ -121,33 +131,15 @@ function loadModelFromWavefrontOBJ(gl, filename, options) {
 }
 
 function _loadModelFromWavefrontOBJ(gl, text, options) {
-    if (typeof options === "undefined") {
-        options = {};
-    } else if (typeof options !== "object") {
-        throw new Error("Invalid argumenmt.");
-    }
-    const DEFAULTS = { colors: null, unpackColors: false };
-    options = Object.assign(DEFAULTS, options);
+    const DEFAULTS = {
+        colors: null,
+        unpackColors: false
+    };
+    options = initOptions(options, DEFAULTS);
 
     const unpackColors = options.unpackColors === true;
 
-    // Parse tokens from the wavefront obj text.
-    let lines;
-    {
-        const filterEmptyStrings = a => a.filter(x => x.match(/.+/) !== null);
-
-        // Split into lines
-        lines = text.split(/\n/);
-        lines = filterEmptyStrings(lines);
-        
-        // Split each line into tokens
-        lines = lines.map(line => line.split(/\s/));
-        lines = lines.map(tokens => filterEmptyStrings(tokens));
-        lines = lines.filter(tokens => tokens.length !== 0);
-        
-        // filter comments out
-        lines = lines.filter(tokens => tokens[0] !== "#");
-    }
+    const lines = parseText(text);
 
     const packedPositions = [];
     const packedNormals = [];
@@ -171,21 +163,6 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
 
     const stringsToFloats = a => a.map(s => Number(s));
 
-    // Pushes every element in b onto a.
-    const pushArray = (a, b) => {
-        for (let i = 0; i < b.length; ++i) {
-            a.push(b[i]);
-        }
-    };
-
-    // Pushes a slice of b onto a.
-    const pushSliceOfArray = (a, b, startIndex, numComponents) => {
-        for (let i = 0; i < numComponents; ++i) {
-            const j = (startIndex * numComponents) + i;
-            a.push(b[j]);
-        }
-    }
-
     // Load data from each line.
     for (const tokens of lines) {
         const firstToken = tokens.shift();
@@ -195,19 +172,19 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
                 throw new Error("Invalid length.");
             }
 
-            pushArray(packedPositions, stringsToFloats(tokens));
+            concat(packedPositions, stringsToFloats(tokens));
         } else if (firstToken === "vt") { // texture coords
             if (tokens.length !== 2) {
                 throw new Error("Invalid length.");
             }
 
-            pushArray(packedTexCoords, stringsToFloats(tokens));
+            concat(packedTexCoords, stringsToFloats(tokens));
         } else if (firstToken === "vn") { // normals
             if (tokens.length !== 3) {
                 throw new Error("Invalid length.");
             }
             
-            pushArray(packedNormals, stringsToFloats(tokens));
+            concat(packedNormals, stringsToFloats(tokens));
         } else if (firstToken === "f") {
             if (tokens.length !== 3) {
                 throw new Error("Invalid length.");
@@ -239,18 +216,45 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
     for (let mapping of vertexMappings) {
         mapping = mapping.split(/\//);
         mapping = mapping.map(x => Number(x) - 1);
-        let [posI, texCoordI, normalI] = mapping;
+        const [posI, texCoordI, normalI] = mapping;
 
-        pushSliceOfArray(positions, packedPositions, posI, 3);
-        pushSliceOfArray(texCoords, packedTexCoords, texCoordI, 2);
-        pushSliceOfArray(normals, packedNormals, normalI, 3);
+        concatSlice(positions, packedPositions, posI * 3, 3);
+        concatSlice(texCoords, packedTexCoords, texCoordI * 2, 2);
+        concatSlice(normals, packedNormals, normalI * 3, 3);
 
         if (unpackColors) {
-            pushSliceOfArray(colors, options.colors, posI, 3);
+            concatSlice(colors, options.colors, posI * 3, 3);
         }
     }
 
-    return loadModel(gl, positions, indices, { normals, colors });
+    const m = loadModel(gl, positions, indices, { normals, colors, texCoords });
+
+    return m;
+}
+
+/**
+ * Returns an array of lines with
+ * each line being an array of tokens parsed
+ * from the text.
+ */
+function parseText(text) {
+    const filterEmptyStrings = a => a.filter(x => x.match(/.+/) !== null);
+
+    let lines;
+
+    // Split into lines
+    lines = text.split(/\n/);
+    lines = filterEmptyStrings(lines);
+    
+    // Split each line into tokens
+    lines = lines.map(line => line.split(/\s/));
+    lines = lines.map(tokens => filterEmptyStrings(tokens));
+    lines = lines.filter(tokens => tokens.length !== 0);
+    
+    // filter comments out
+    lines = lines.filter(tokens => tokens[0] !== "#");
+
+    return lines;
 }
 
 export { loadCubeModel, loadModelFromWavefrontOBJ };

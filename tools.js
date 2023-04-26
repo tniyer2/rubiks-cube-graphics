@@ -1,5 +1,5 @@
 
-import { makeFilledArray } from "./type.js";
+import { makeFilledArray } from "./utils.js";
 import { Vec3 } from "./linearAlgebraUtils.js";
 
 /**
