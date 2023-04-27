@@ -455,20 +455,20 @@ function render() {
 
 /** rotate a row or column of the cube when a key is pressed */
 function updateRubiksCubeTransform() {
-    const rotations = [
+    const ROTATIONS = [
         "left", "xMiddle", "right",
         "front", "zMiddle", "back",
         "up", "yMiddle", "down"
-    ]
+    ];
 
-    const rotationKeys = [
+    const ROTATION_KEYS = [
         "l", "x", "r",
         "f", "z", "b",
         "u", "y", "d"
     ];
 
-    const i = rotationKeys.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
-    const rotation = i === -1 ? null : rotations[i];
+    const i = ROTATION_KEYS.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
+    const rotation = i === -1 ? null : ROTATIONS[i];
 
     if (rotation) {
         const [transformation, cubletIndices] = getRotationInfo(rotation);
@@ -476,6 +476,8 @@ function updateRubiksCubeTransform() {
         for (const i of cubletIndices) {
             const child = GLB.childrens.removeChildAt(i);
         }
+
+        GLB.childrens.updateChildren(newChildren);
 
         const radians = degreesToRadians(90);
         const rotationMatrix = Mat4.fromRotation(Mat4.create(), radians, rotationAxis);

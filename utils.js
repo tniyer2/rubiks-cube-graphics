@@ -73,4 +73,9 @@ function logOnce(key, ...args) {
     logMaxTimes(key, 1, ...args);
 }
 
-export { makeFilledArray, concat, concatSlice, initOptions, logMaxTimes, logOnce };
+export {
+    makeFilledArray,
+    concat, concatSlice,
+    initOptions,
+    logMaxTimes, logOnce
+};
