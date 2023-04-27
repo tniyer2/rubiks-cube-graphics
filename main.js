@@ -255,8 +255,6 @@ async function initGameWorld() {
         centerCubletModel
     ];
 
-    GLB.childrensTransforms = [];
-
     // Create smaller cubes
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
@@ -269,16 +267,12 @@ async function initGameWorld() {
                 
                 cublet.model = cubletModels[numAxesCentered];
 
-                const m = Mat4.identity(Mat4.create());
-                translateMat4(m, [x, y, z].map(e => (e - 1) * 0.5));
+                translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
                 // TODO: When models are complete, rotate them so they are oriented correctly.
-                scaleMat4(m, 0.2);
-
-                cublet.localTransform = Mat4.clone(m);
+                scaleMat4(cublet.localTransform, 0.2);
 
                 cublet.originalIndex = [x, y, z];
 
-                GLB.childrensTransforms.push(m);
                 GLB.childrens.addChild(cublet);
             }
         }
@@ -516,7 +510,7 @@ function updateRubiksCubeTransform(delta) {
         switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
     }
     
-    rotateMat4(GLB.temp.localTransform, 90, [1, 0, 0]);
+    rotateMat4(GLB.temp.localTransform, 90, [-1, 0, 0]);
 
     for (const cublet of cubletsToRotate) {
         switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
@@ -533,18 +527,6 @@ function updateRubiksCubeTransform(delta) {
     }
 
     GLB.childrens.setChildren(newChildren);
-
-    // Reset to original transforms.
-    /*
-    for (let i = 0; i < GLB.childrensTransforms.length; ++i) {
-        const t = GLB.childrensTransforms[i];
-        GLB.childrens.children[i].localTransform = t;
-    }
-    */
-
-    for (const child of GLB.childrens.children) {
-        console.log(child.originalIndex);
-    }
 }
 
 function getRotationInfo(rotation) {
@@ -635,7 +617,7 @@ function getRotationInfo(rotation) {
         rotateMat4(t, 90, axis);
     }
     if (translation !== null) {
-        translateMat4(t, translation);
+        // translateMat4(t, translation);
     }
 
     return [t, indices, newIndices];
