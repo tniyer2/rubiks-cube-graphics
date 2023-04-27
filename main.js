@@ -11,7 +11,7 @@ import {
 
 import { stringToColor } from "./tools.js";
 
-import { SceneTreeNode } from "./sceneTree.js";
+import { SceneTreeNode, switchParentKeepTransform } from "./sceneTree.js";
 
 import { loadModelFromWavefrontOBJ } from "./models.js";
 
@@ -50,6 +50,9 @@ window.addEventListener("load", async function init() {
     await initGameWorld();
     initEvents();
     onWindowResize();
+
+    GLB.lastFrameTime = null;
+    GLB.rotationCountDown = 0;
 
     // Start the Game Loop
     runFrame();
@@ -220,7 +223,10 @@ async function initGameWorld() {
         rotateMat4(GLB.rubiksCube.localTransform, 45, [0, 1, 0]);
 
         GLB.childrens = SceneTreeNode("empty");
+        
         GLB.temp = SceneTreeNode("empty");
+        // translateMat4(GLB.temp.localTransform, [1, 1, 2]);
+        // rotateMat4(GLB.temp.localTransform, 90, [0, 1, 0]);
 
         GLB.world.addChild(GLB.rubiksCube);
         GLB.rubiksCube.addChild(GLB.childrens);
@@ -249,6 +255,8 @@ async function initGameWorld() {
         centerCubletModel
     ];
 
+    GLB.childrensTransforms = [];
+
     // Create smaller cubes
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
@@ -261,10 +269,16 @@ async function initGameWorld() {
                 
                 cublet.model = cubletModels[numAxesCentered];
 
-                translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
+                const m = Mat4.identity(Mat4.create());
+                translateMat4(m, [x, y, z].map(e => (e - 1) * 0.5));
                 // TODO: When models are complete, rotate them so they are oriented correctly.
-                scaleMat4(cublet.localTransform, 0.2);
+                scaleMat4(m, 0.2);
 
+                cublet.localTransform = Mat4.clone(m);
+
+                cublet.originalIndex = [x, y, z];
+
+                GLB.childrensTransforms.push(m);
                 GLB.childrens.addChild(cublet);
             }
         }
@@ -413,7 +427,17 @@ function onMouse(e, state, self) {
  * Runs all tasks for a single frame.
  */
 function runFrame() {
-    updateRubiksCubeTransform();
+    const time = performance.now();
+
+    if (GLB.lastFrameTime === null) {
+        GLB.lastFrameTime = time;
+    }
+
+    const delta = time - GLB.lastFrameTime;
+
+    GLB.lastFrameTime = time;
+
+    updateRubiksCubeTransform(delta);
 
     render();
 
@@ -453,37 +477,73 @@ function render() {
     gl.bindVertexArray(null);
 }
 
+const ROTATIONS = [
+    "left", "xMiddle", "right",
+    "front", "zMiddle", "back",
+    "up", "yMiddle", "down"
+];
+
+const ROTATION_KEYS = [
+    "l", "x", "r",
+    "f", "z", "b",
+    "u", "y", "d"
+];
+
 /** rotate a row or column of the cube when a key is pressed */
-function updateRubiksCubeTransform() {
-    const ROTATIONS = [
-        "left", "xMiddle", "right",
-        "front", "zMiddle", "back",
-        "up", "yMiddle", "down"
-    ];
+function updateRubiksCubeTransform(delta) {
+    const index = ROTATION_KEYS.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
+    const rotation = index === -1 ? null : ROTATIONS[index];
 
-    const ROTATION_KEYS = [
-        "l", "x", "r",
-        "f", "z", "b",
-        "u", "y", "d"
-    ];
+    if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= delta;
 
-    const i = ROTATION_KEYS.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
-    const rotation = i === -1 ? null : ROTATIONS[i];
+    if (!rotation || GLB.rotationCountDown > 0) return;
 
-    if (rotation) {
-        const [transformation, indices, newIndices] = getRotationInfo(rotation);
+    // reset countdown to 0.2 seconds
+    GLB.rotationCountDown = 200;
 
-        console.log(transformation, indices, newIndices);
+    const [transformation, indices, newIndices] = getRotationInfo(rotation);
 
-        /*
-        for (const i of cubletIndices) {
-            const child = GLB.childrens.removeChildAt(i);
-        }
-        */
+    // console.log(transformation, indices, newIndices);
 
-        // GLB.childrens.updateChildren(newChildren);
+    const newChildren = GLB.childrens.children.slice();
+    const temp = newChildren.slice();
 
-        // GLB.temp.localTransform = transformation;
+    const cubletsToRotate = indices.map(i => GLB.childrens.children[i]);
+
+    GLB.temp.localTransform = transformation;
+
+    for (const cublet of cubletsToRotate) {
+        switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
+    }
+    
+    rotateMat4(GLB.temp.localTransform, 90, [1, 0, 0]);
+
+    for (const cublet of cubletsToRotate) {
+        switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
+    }
+
+    GLB.temp.localTransform = Mat4.identity(Mat4.create());
+    GLB.temp.setChildren([]);
+
+    for (let i = 0; i < indices.length; ++i) {
+        const curI = indices[i];
+        const newI = newIndices[i];
+
+        newChildren[newI] = temp[curI];
+    }
+
+    GLB.childrens.setChildren(newChildren);
+
+    // Reset to original transforms.
+    /*
+    for (let i = 0; i < GLB.childrensTransforms.length; ++i) {
+        const t = GLB.childrensTransforms[i];
+        GLB.childrens.children[i].localTransform = t;
+    }
+    */
+
+    for (const child of GLB.childrens.children) {
+        console.log(child.originalIndex);
     }
 }
 

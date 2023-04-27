@@ -32,7 +32,7 @@ function SceneTreeNode(type) {
         }
 
         this.children.splice(i, 1);
-        this.child.parent = null;
+        child.parent = null;
     }
 
     obj.removeChildAt = function (index) {
@@ -95,4 +95,24 @@ function SceneTreeNode(type) {
     return obj;
 }
 
-export { SceneTreeNode };
+function switchParentKeepTransform(child, oldParent, newParent, noSwitch) {
+    noSwitch = noSwitch === true;
+
+    const newTransform = Mat4.multiply(
+        Mat4.create(),
+        Mat4.invert(Mat4.create(), newParent.transform),
+        child.transform,
+    );
+
+    if (!noSwitch) {
+        oldParent.removeChild(child);
+    }
+
+    child.localTransform = newTransform;
+    
+    if (!noSwitch) {
+        newParent.addChild(child);
+    }
+}
+
+export { SceneTreeNode, switchParentKeepTransform};
