@@ -232,6 +232,7 @@ async function initGameWorld() {
         GLB.rubiksCube.addChild(GLB.temp);
     }
 
+    // Official colors of the Rubik's Cube.
     const RED = stringToColor("#BA0C2F");
     const BLUE = stringToColor("#003DA5");
     const YELLOW = stringToColor("#FFD700");
@@ -240,7 +241,7 @@ async function initGameWorld() {
     const GREEN = stringToColor("#009A44");
     const BLACK = [0, 0, 0];
 
-    const colors = [RED, BLUE, YELLOW, ORANGE, WHITE, GREEN, BLACK, BLACK]
+    const colors = [WHITE, RED, GREEN, YELLOW, BLUE, ORANGE, BLACK, BLACK]
         .flatMap(c => [c, c, c]).flat();
 
     const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { colors });
@@ -502,7 +503,7 @@ function updateRubiksCube(deltaTimeMs) {
         for (let i = 0; i < NUM_SHUFFLES; ++i) {
             let rotation = Math.floor(Math.random() * ROTATIONS.length);
             rotation = ROTATIONS[rotation];
-            
+
             const rotateClockwise = Math.random() < 0.5 ? false : true;
 
             rotateRubiksCubeSide(rotation, rotateClockwise);
