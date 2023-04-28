@@ -22,7 +22,6 @@ import {
     KeyInputManager
 } from "./input.js";
 
-
 // Global WebGL context variable.
 let gl;
 
@@ -50,10 +49,11 @@ window.addEventListener("load", async function init() {
     initUniforms();
     await initGameWorld();
     initEvents();
-    onWindowResize();
+    resizeCanvas();
 
     GLB.lastFrameTime = null;
     GLB.rotationCountDown = 0;
+    GLB.curRotation = null;
 
     // Start the Game Loop
     runFrame();
@@ -283,7 +283,7 @@ async function initGameWorld() {
  * Initialize event handlers.
  */
 function initEvents() {
-    window.addEventListener("resize", onWindowResize);
+    window.addEventListener("resize", resizeCanvas);
 
     GLB.keyInput = KeyInputManager(window);
 
@@ -294,7 +294,7 @@ function initEvents() {
 /**
  * Keep the canvas sized to the window.
  */
-function onWindowResize() {
+function resizeCanvas() {
     const size = Math.min(window.innerWidth, window.innerHeight);
 
     gl.canvas.width = size;
@@ -480,46 +480,77 @@ const ROTATIONS = [
 ];
 
 const ROTATION_KEYS = [
-    "l", "x", "r",
-    "f", "z", "b",
+    "g", "x", "b",
+    "r", "z", "o",
     "u", "y", "d"
 ];
 
 const ROTATE_CLOCKWISE_KEY = "Shift";
 
+const ROTATION_TIME = 300;
+
 const NUM_SHUFFLES = 20;
 const SHUFFLE_RUBIKS_CUBE_KEY = "s";
 
+const START_ROTATE = 0;
+const DO_ROTATE = 1;
+const END_ROTATE = 2;
+
 function updateRubiksCube(deltaTimeMs) {
-    /*
-    if (GLB.shufflingRubiksCube === true) {
-        return;
-    }
-    */
+    if (GLB.curRotation !== null) {
+        if (GLB.timeSinceRotationStart === 0) {
+            const [rotation, rotateClockwise] = GLB.curRotation;
+            rotateRubiksCubeSide(rotation, rotateClockwise, 0, START_ROTATE);
 
-    if (GLB.keyInput.isKeyDown(SHUFFLE_RUBIKS_CUBE_KEY)) {
-        // GLB.shufflingRubiksCube = true;
+            GLB.timeSinceRotationStart += deltaTimeMs;
+            return;
+        }
 
-        for (let i = 0; i < NUM_SHUFFLES; ++i) {
-            let rotation = Math.floor(Math.random() * ROTATIONS.length);
-            rotation = ROTATIONS[rotation];
+        GLB.timeSinceRotationStart += deltaTimeMs;
+        let interpolation = GLB.timeSinceRotationStart / ROTATION_TIME;
 
-            const rotateClockwise = Math.random() < 0.5 ? false : true;
+        let reset = false;
+        if (interpolation > 1.0) {
+            interpolation = 1.0;
+            reset = true;
+        }
 
-            rotateRubiksCubeSide(rotation, rotateClockwise);
+        const [rotation, rotateClockwise] = GLB.curRotation;
+        rotateRubiksCubeSide(rotation, rotateClockwise, interpolation, reset ? END_ROTATE : DO_ROTATE);
+
+        if (reset === true) {
+            GLB.curRotation = null;
+            GLB.timeSinceRotationStart = null;
         }
         return;
     }
 
-    const input = getUserInputForRubiksCube(deltaTimeMs);
-    
+    let input = getUserInputForShufflingRubiksCube(deltaTimeMs);
+    if (input) {
+        shuffleRubiksCube();
+        return;
+    }
+
+    input = getUserInputForRotatingRubiksCube(deltaTimeMs);
     if (input !== null) {
-        const [rotation, rotateClockwise] = input;
-        rotateRubiksCubeSide(rotation, rotateClockwise);
+        GLB.curRotation = input;
+        GLB.timeSinceRotationStart = 0;
     }
 }
 
-function getUserInputForRubiksCube(deltaTimeMs) {
+function getUserInputForShufflingRubiksCube(deltaTimeMs) {
+    if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= deltaTimeMs;
+    if (GLB.rotationCountDown > 0) return false;
+
+    if (!GLB.keyInput.isKeyDown(SHUFFLE_RUBIKS_CUBE_KEY)) return false;
+
+    // Reset countdown to 0.2 seconds.
+    GLB.rotationCountDown = 200;
+
+    return true;
+}
+
+function getUserInputForRotatingRubiksCube(deltaTimeMs) {
     if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= deltaTimeMs;
     if (GLB.rotationCountDown > 0) return null;
 
@@ -540,40 +571,62 @@ function getUserInputForRubiksCube(deltaTimeMs) {
     return [selectedRotation, isShiftDown];
 }
 
-/**
- * Rotate a side of the cube.
- */
-function rotateRubiksCubeSide(rotation, rotateClockwise) {
-    const [alignmentMatrix, rotationMatrix, indices, newIndices] = getRotationInfo(rotation, rotateClockwise);
+function shuffleRubiksCube() {
+    for (let i = 0; i < NUM_SHUFFLES; ++i) {
+        const j = Math.floor(Math.random() * ROTATIONS.length);
+        const rotation = ROTATIONS[j];
 
-    const newChildren = GLB.childrens.children.slice();
-    const temp = newChildren.slice();
+        const rotateClockwise = Math.random() < 0.5 ? false : true;
 
-    const cubletsToRotate = indices.map(i => GLB.childrens.children[i]);
+        rotateRubiksCubeSide(rotation, rotateClockwise, 0, START_ROTATE);
+        rotateRubiksCubeSide(rotation, rotateClockwise, 1, DO_ROTATE);
+        rotateRubiksCubeSide(rotation, rotateClockwise, 1, END_ROTATE);
+    }
+}
 
-    GLB.temp.localTransform = alignmentMatrix;
+function rotateRubiksCubeSide(rotation, rotateClockwise, interpolation, rotateState) {
+    const [alignmentMatrix, rotationMatrix, indices, newIndices] = getRotationInfo(rotation, rotateClockwise, interpolation);
 
-    for (const cublet of cubletsToRotate) {
-        switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
+    if (rotateState === START_ROTATE) {
+        GLB.childrensCopy = GLB.childrens.children.slice();
+
+        GLB.cubletsToRotate = indices.map(i => GLB.childrensCopy[i]);
+
+        GLB.temp.localTransform = alignmentMatrix;
+
+        for (const cublet of GLB.cubletsToRotate) {
+            switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
+        }
+        return;
     }
     
-    multiplyMat4(GLB.temp.localTransform, rotationMatrix);
-
-    for (const cublet of cubletsToRotate) {
-        switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
+    if (rotateState === DO_ROTATE || rotateState === END_ROTATE) {
+        GLB.temp.localTransform = alignmentMatrix;
+        multiplyMat4(GLB.temp.localTransform, rotationMatrix);
     }
 
-    GLB.temp.localTransform = identityMat4();
-    GLB.temp.setChildren([]);
+    if (rotateState === END_ROTATE) {
+        for (const cublet of GLB.cubletsToRotate) {
+            switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
+        }
 
-    for (let i = 0; i < indices.length; ++i) {
-        const curI = indices[i];
-        const newI = newIndices[i];
+        GLB.temp.localTransform = identityMat4();
+        GLB.temp.setChildren([]);
 
-        newChildren[newI] = temp[curI];
+        const temp = GLB.childrensCopy.slice();
+
+        for (let i = 0; i < indices.length; ++i) {
+            const curI = indices[i];
+            const newI = newIndices[i];
+
+            GLB.childrensCopy[newI] = temp[curI];
+        }
+
+        GLB.childrens.setChildren(GLB.childrensCopy);
+
+        GLB.childrensCopy = null;
+        GLB.cubletsToRotate = null;
     }
-
-    GLB.childrens.setChildren(newChildren);
 }
 
 // relative to the coordinate space not relative to the center of the cube
@@ -599,7 +652,7 @@ const ROTATION_ALIGNMENT_AXES = [
     Z_AXIS, Z_AXIS, Z_AXIS
 ]
 
-function getRotationInfo(rotation, rotateClockwise) {
+function getRotationInfo(rotation, rotateClockwise, interpolation) {
     let indicesToRotate, newIndicesAfterRotation, axis;
 
     if (rotation === "left") {
@@ -637,7 +690,7 @@ function getRotationInfo(rotation, rotateClockwise) {
     }
 
     const factor = rotateClockwise ? -1 : 1;
-    const rotationMatrix = angleAxisToMat4(factor * 90, [-1, 0, 0]);
+    const rotationMatrix = angleAxisToMat4(factor * 90 * interpolation, [-1, 0, 0]);
 
     return [alignmentMatrix, rotationMatrix, indicesToRotate, newIndicesAfterRotation];
 }
