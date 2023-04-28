@@ -6,6 +6,14 @@ const Vec3 = glMatrix.vec3;
 const Quat = glMatrix.quat;
 const Mat4 = glMatrix.mat4;
 
+function identityMat4() {
+    return Mat4.identity(Mat4.create());
+}
+
+function multiplyMat4(a, b) {
+    return Mat4.multiply(a, a, b);
+}
+
 // Translates a Mat4 by a Vec3.
 function translateMat4(matrix, v) {
     if (isNumber(v)) {
@@ -76,6 +84,7 @@ function radiansToDegrees(rads) {
 
 export {
     Vec2, Vec3, Quat, Mat4,
+    identityMat4, multiplyMat4,
     translateMat4, scaleMat4, rotateMat4,
     angleAxisToQuat, angleAxisToMat4,
     degreesToRadians, radiansToDegrees

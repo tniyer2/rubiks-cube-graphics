@@ -4,6 +4,7 @@
 
 import {
     Vec2, Mat4,
+    identityMat4, multiplyMat4,
     translateMat4, scaleMat4, rotateMat4,
     angleAxisToMat4,
     degreesToRadians, radiansToDegrees
@@ -225,8 +226,6 @@ async function initGameWorld() {
         GLB.childrens = SceneTreeNode("empty");
         
         GLB.temp = SceneTreeNode("empty");
-        // translateMat4(GLB.temp.localTransform, [1, 1, 2]);
-        // rotateMat4(GLB.temp.localTransform, 90, [0, 1, 0]);
 
         GLB.world.addChild(GLB.rubiksCube);
         GLB.rubiksCube.addChild(GLB.childrens);
@@ -421,17 +420,21 @@ function onMouse(e, state, self) {
  * Runs all tasks for a single frame.
  */
 function runFrame() {
-    const time = performance.now();
+    // Get time since last frame (in milliseconds).
+    let deltaTimeMs;
+    {
+        const time = performance.now();
 
-    if (GLB.lastFrameTime === null) {
+        if (GLB.lastFrameTime === null) {
+            GLB.lastFrameTime = time;
+        }
+
+        deltaTimeMs = time - GLB.lastFrameTime;
+
         GLB.lastFrameTime = time;
     }
 
-    const delta = time - GLB.lastFrameTime;
-
-    GLB.lastFrameTime = time;
-
-    updateRubiksCubeTransform(delta);
+    updateRubiksCube(deltaTimeMs);
 
     render();
 
@@ -442,8 +445,6 @@ function runFrame() {
  * Render the scene.
  */
 function render() {
-    const ms = performance.now();
-
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     gl.uniform4fv(gl.program.uLight, [0, 0, 10, 1]);
@@ -483,40 +484,85 @@ const ROTATION_KEYS = [
     "u", "y", "d"
 ];
 
-/** rotate a row or column of the cube when a key is pressed */
-function updateRubiksCubeTransform(delta) {
-    const index = ROTATION_KEYS.findIndex((keyName) => GLB.keyInput.isKeyDown(keyName));
-    const rotation = index === -1 ? null : ROTATIONS[index];
+const ROTATE_CLOCKWISE_KEY = "Shift";
 
-    if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= delta;
+const NUM_SHUFFLES = 20;
+const SHUFFLE_RUBIKS_CUBE_KEY = "s";
 
-    if (!rotation || GLB.rotationCountDown > 0) return;
+function updateRubiksCube(deltaTimeMs) {
+    /*
+    if (GLB.shufflingRubiksCube === true) {
+        return;
+    }
+    */
 
-    // reset countdown to 0.2 seconds
+    if (GLB.keyInput.isKeyDown(SHUFFLE_RUBIKS_CUBE_KEY)) {
+        // GLB.shufflingRubiksCube = true;
+
+        for (let i = 0; i < NUM_SHUFFLES; ++i) {
+            let rotation = Math.floor(Math.random() * ROTATIONS.length);
+            rotation = ROTATIONS[rotation];
+            
+            const rotateClockwise = Math.random() < 0.5 ? false : true;
+
+            rotateRubiksCubeSide(rotation, rotateClockwise);
+        }
+        return;
+    }
+
+    const input = getUserInputForRubiksCube(deltaTimeMs);
+    
+    if (input !== null) {
+        const [rotation, rotateClockwise] = input;
+        rotateRubiksCubeSide(rotation, rotateClockwise);
+    }
+}
+
+function getUserInputForRubiksCube(deltaTimeMs) {
+    if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= deltaTimeMs;
+    if (GLB.rotationCountDown > 0) return null;
+
+    const i = ROTATION_KEYS.findIndex(
+        (keyName) => GLB.keyInput.isKeyDown(keyName) ||
+            GLB.keyInput.isKeyDown(keyName.toUpperCase()));
+    
+    // User didn't enter input for any side.
+    if (i === -1) return null;
+
+    const isShiftDown = GLB.keyInput.isKeyDown(ROTATE_CLOCKWISE_KEY);
+
+    const selectedRotation = ROTATIONS[i];
+
+    // Reset countdown to 0.2 seconds.
     GLB.rotationCountDown = 200;
+    
+    return [selectedRotation, isShiftDown];
+}
 
-    const [transformation, indices, newIndices] = getRotationInfo(rotation);
-
-    // console.log(transformation, indices, newIndices);
+/**
+ * Rotate a side of the cube.
+ */
+function rotateRubiksCubeSide(rotation, rotateClockwise) {
+    const [alignmentMatrix, rotationMatrix, indices, newIndices] = getRotationInfo(rotation, rotateClockwise);
 
     const newChildren = GLB.childrens.children.slice();
     const temp = newChildren.slice();
 
     const cubletsToRotate = indices.map(i => GLB.childrens.children[i]);
 
-    GLB.temp.localTransform = transformation;
+    GLB.temp.localTransform = alignmentMatrix;
 
     for (const cublet of cubletsToRotate) {
         switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
     }
     
-    rotateMat4(GLB.temp.localTransform, 90, [-1, 0, 0]);
+    multiplyMat4(GLB.temp.localTransform, rotationMatrix);
 
     for (const cublet of cubletsToRotate) {
         switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
     }
 
-    GLB.temp.localTransform = Mat4.identity(Mat4.create());
+    GLB.temp.localTransform = identityMat4();
     GLB.temp.setChildren([]);
 
     for (let i = 0; i < indices.length; ++i) {
@@ -529,129 +575,104 @@ function updateRubiksCubeTransform(delta) {
     GLB.childrens.setChildren(newChildren);
 }
 
-function getRotationInfo(rotation) {
-    function cubletPositionToIndex(pos) {
-        return (pos[0] * 9) + (pos[1] * 3) + pos[2];
-    }
+// relative to the coordinate space not relative to the center of the cube
+const ROTATION_MAPPINGS_CLOCKWISE = [
+    [2, 0], [2, 1], [2, 2],
+    [1, 0], [1, 1], [1, 2],
+    [0, 0], [0, 1], [0, 2]
+];
 
-    const ROTATION_MAPPINGS_CLOCKWISE = [
-        [2, 0], [2, 1], [2, 2],
-        [1, 0], [1, 1], [1, 2],
-        [0, 0], [0, 1], [0, 2]
-    ];
+// relative to the coordinate space not relative to the center of the cube
+const ROTATION_MAPPINGS_COUNTER_CLOCKWISE = [
+    [0, 2], [0, 1], [0, 0],
+    [1, 2], [1, 1], [1, 0],
+    [2, 2], [2, 1], [2, 0]
+];
 
-    const ROTATION_MAPPINGS_COUNTER_CLOCKWISE = [
-        [0, 2], [0, 1], [0, 0],
-        [1, 2], [1, 1], [1, 0],
-        [2, 2], [2, 1], [2, 0]
-    ];
+const Y_AXIS = [0, 1, 0];
+const Z_AXIS = [0, 0, 1];
 
-    function getIndicesOfCubletsToRotate(axisI, axisJ, lockedAxis, lockedValue) {
-        const indices = [];
-        const newIndices = [];
+const ROTATION_ALIGNMENT_AXES = [
+    null, null, null,
+    Y_AXIS, Y_AXIS, Y_AXIS,
+    Z_AXIS, Z_AXIS, Z_AXIS
+]
 
-        for (let i = 0; i < 3; ++i) {
-            for (let j = 0; j < 3; ++j) {
-                const pos = Array(3);
-                pos[axisI] = i;
-                pos[axisJ] = j;
-                pos[lockedAxis] = lockedValue;
-
-                indices.push(cubletPositionToIndex(pos));
-
-                const newPos = Array(3);
-                const [newI, newJ] = ROTATION_MAPPINGS_COUNTER_CLOCKWISE[(j * 3) + i];
-                newPos[axisI] = newI;
-                newPos[axisJ] = newJ;
-                newPos[lockedAxis] = lockedValue;
-
-                newIndices.push(cubletPositionToIndex(newPos));
-            }
-        }
-
-        return [indices, newIndices];
-    }
-
-    let indices, newIndices, translation, axis;
+function getRotationInfo(rotation, rotateClockwise) {
+    let indicesToRotate, newIndicesAfterRotation, axis;
 
     if (rotation === "left") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 2, 0, 0);
-        translation = [1, 0, 0];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 0, rotateClockwise);
         axis = null;
     } else if (rotation === "xMiddle") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 2, 0, 1);
-        translation = null;
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 1, rotateClockwise);
         axis = null;
     } else if (rotation === "right") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 2, 0, 2);
-        translation = [-1, 0, 0];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 2, rotateClockwise);
         axis = null;
     } else if (rotation === "front") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 0, 2, 2);
-        translation = [0, 0, -1];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 2, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "zMiddle") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 0, 2, 1);
-        translation = null;
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 1, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "back") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(1, 0, 2, 0);
-        translation = [0, 0, 1];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 0, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "up") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(2, 0, 1, 2);
-        translation = [0, -1, 0];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 2, rotateClockwise);
         axis = [0, 0, 1];
     } else if (rotation === "yMiddle") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(2, 0, 1, 1);
-        translation = null;
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 1, rotateClockwise);
         axis = [0, 0, 1];
     } else if (rotation === "down") {
-        [indices, newIndices] = getIndicesOfCubletsToRotate(2, 0, 1, 0);
-        translation = [0, 1, 0];
+        [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 0, rotateClockwise);
         axis = [0, 0, 1];
     }
 
-    const t = Mat4.create();
+    const alignmentMatrix = identityMat4();
     if (axis !== null) {
-        rotateMat4(t, 90, axis);
-    }
-    if (translation !== null) {
-        // translateMat4(t, translation);
+        rotateMat4(alignmentMatrix, 90, axis);
     }
 
-    return [t, indices, newIndices];
+    const factor = rotateClockwise ? -1 : 1;
+    const rotationMatrix = angleAxisToMat4(factor * 90, [-1, 0, 0]);
+
+    return [alignmentMatrix, rotationMatrix, indicesToRotate, newIndicesAfterRotation];
 }
 
-// Function to rotate the row containing the specified child cube
-function rotateRowContainingChild(child) {
-    // Get the parent node of the child
-    const parent = child.parent;
+function getIndicesOfCubletsToRotate(axisI, axisJ, lockedAxis, lockedValue, rotateClockwise) {
+    rotateClockwise = rotateClockwise === true;
 
-    // Find the row that the child belongs to
-    let rowIndex = null;
-    for (let i = 0; i < parent.children.length; ++i) {
-        const position = parent.children[i].position;
-        if (position[1] === child.position[1]) {
-            rowIndex = Math.floor(i / 3);
-            break;
+    const indices = [];
+    const newIndices = [];
+
+    for (let i = 0; i < 3; ++i) {
+        for (let j = 0; j < 3; ++j) {
+            const pos = Array(3);
+            pos[axisI] = i;
+            pos[axisJ] = j;
+            pos[lockedAxis] = lockedValue;
+
+            indices.push(cubletPositionToIndex(pos));
+
+            const mappings = rotateClockwise ?
+                ROTATION_MAPPINGS_CLOCKWISE :
+                ROTATION_MAPPINGS_COUNTER_CLOCKWISE;
+            
+            const newPos = Array(3);
+            const [newI, newJ] = mappings[(j * 3) + i];
+            newPos[axisI] = newI;
+            newPos[axisJ] = newJ;
+            newPos[lockedAxis] = lockedValue;
+
+            newIndices.push(cubletPositionToIndex(newPos));
         }
     }
 
-    // Rotate the entire row along the X or Z axis depending on the orientation of the row
-    if (rowIndex === 0 || rowIndex === 2) {
-        // Row is oriented along the X axis
-        const radians = degreesToRadians(90);
-        const rotationMatrix = Mat4.fromXRotation(Mat4.create(), radians);
-        const translationMatrix = Mat4.translate(Mat4.create(), parent.getLocalTransform(), [0, child.position[1], 0]);
-        const transformedMatrix = Mat4.multiply(Mat4.create(), translationMatrix, rotationMatrix);
-        parent.setLocalTransform(transformedMatrix);
-    } else {
-        // Row is oriented along the Z axis
-        const radians = degreesToRadians(90);
-        const rotationMatrix = Mat4.fromZRotation(Mat4.create(), radians);
-        const translationMatrix = Mat4.translate(Mat4.create(), parent.getLocalTransform(), [0, 0, child.position[2]]);
-        const transformedMatrix = Mat4.multiply(Mat4.create(), translationMatrix, rotationMatrix);
-        parent.setLocalTransform(transformedMatrix);
-    }
+    return [indices, newIndices];
+}
+
+function cubletPositionToIndex(pos) {
+    return (pos[0] * 9) + (pos[1] * 3) + pos[2];
 }

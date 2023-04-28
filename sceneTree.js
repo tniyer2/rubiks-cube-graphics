@@ -1,6 +1,6 @@
 
 import { isNumber, makeObj } from "./type.js";
-import { Mat4 } from "./linearAlgebraUtils.js";
+import { Mat4, identityMat4 } from "./linearAlgebraUtils.js";
 
 let GLB_NODE_ID = 0;
 
@@ -11,7 +11,7 @@ function SceneTreeNode(type) {
     const obj = {
         _id: ++GLB_NODE_ID,
         type,
-        localTransform: Mat4.identity(Mat4.create()),
+        localTransform: identityMat4(),
         parent: null,
         children: []
     };
@@ -109,7 +109,7 @@ function switchParentKeepTransform(child, oldParent, newParent, noSwitch) {
     }
 
     child.localTransform = newTransform;
-    
+
     if (!noSwitch) {
         newParent.addChild(child);
     }
