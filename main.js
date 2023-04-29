@@ -25,6 +25,9 @@ import {
 // Global WebGL context variable.
 let gl;
 
+// Objects to be drawn
+let obj;
+
 // For storing other globals.
 const GLB = {};
 
@@ -476,6 +479,11 @@ function runFrame() {
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    //let [model.vao, model.count, model.mode, texture] = obj;
+    // Activate and bind both textures
+    gl.activeTexture(gl.TEXTURE0);
+    //gl.bindTexture(gl.TEXTURE_2D, texture);
+
     gl.uniform4fv(gl.program.uLight, [0, 0, 10, 1]);
     gl.uniform1f(gl.program.uLightIntensity, 4);
     
@@ -498,6 +506,8 @@ function render() {
     draw(GLB.world);
 
     // Cleanup
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, null);
     gl.bindVertexArray(null);
 }
 
@@ -761,22 +771,21 @@ function cubletPositionToIndex(pos) {
 /**
  * Load a texture onto the GPU. The second argument is the texture number, defaulting to 0.
  */
-function loadTexture(img, index) {
-    // Default argument value
-    if (typeof index === 'undefined') { index = 0; }
-
+function loadTexture(img) {
     let texture = gl.createTexture(); // create a texture resource on the GPU
-    gl.activeTexture(gl['TEXTURE' + index]); // set the current texture that all following commands will apply to
+    gl.activeTexture(gl.TEXTURE0); // set the current texture that all following commands will apply to
     gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); // tell WebGL to flip the image vertically (almost always want this to be true)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
     // Load the image data into the texture
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
     // Setup options for downsampling and upsampling the image data
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     // Cleanup and return
     gl.bindTexture(gl.TEXTURE_2D, null);
@@ -787,12 +796,11 @@ function loadTexture(img, index) {
  * Initialize the texture buffers.
  */
 function initTextures() {
-    obj.push(loadTexture(createCheckerboardImage(128, 2), 0));
-
     let image = new Image();
     image.src = 'moravian.png';
     image.addEventListener('load', () => {
-        obj.push(loadTexture(image, 1));
+        let texture = loadTexture(image);
+        obj.push(texture);
         render();
     });
 }

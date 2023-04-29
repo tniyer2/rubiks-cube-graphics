@@ -47,6 +47,11 @@ function loadModel(gl, coords, indices, options) {
     loadArrayBuffer(gl, colors, gl.program.aColor, 3, gl.FLOAT);
 
     // TODO: load texCoords into GPU.
+    // buf = gl.createBuffer();
+    // gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    // gl.bufferData(gl.ARRAY_BUFFER, tex_coords, gl.STATIC_DRAW);
+    // gl.vertexAttribPointer(gl.program.aTexCoord, 2, gl.FLOAT, false, 0, 0);
+    // gl.enableVertexAttribArray(gl.program.aTexCoord);
 
     // Load the index data into the GPU.
     indices = Uint16Array.from(indices);
