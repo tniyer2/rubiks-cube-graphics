@@ -28,6 +28,8 @@ let gl;
 // For storing other globals.
 const GLB = {};
 
+const NUM_SHUFFLES = 20;
+
 window.addEventListener("load", async function init() {
     // Get the canvas element.
     const canvas = document.getElementById("webgl-canvas");
@@ -50,6 +52,9 @@ window.addEventListener("load", async function init() {
     await initGameWorld();
     initEvents();
     resizeCanvas();
+
+    // Set Texture Value
+    // gl.uniform1i(gl.program.uTexture, +document.getElementById('texture').value);
 
     GLB.lastFrameTime = null;
     GLB.rotationCountDown = 0;
@@ -77,11 +82,15 @@ function initProgram() {
         in vec4 aPosition;
         in vec3 aNormal;
         in vec3 aColor;
+        in vec2 aTexCoord;
 
         out vec3 vNormalVector;
         out vec3 vLightVector;
         out vec3 vEyeVector;
         flat out vec3 vColor;
+
+        // Texture information
+        out vec2 vTexCoord;
 
         void main() {
             mat4 viewMatrix = inverse(uCameraMatrix);
@@ -96,6 +105,7 @@ function initProgram() {
 
             gl_Position = uProjectionMatrix * P;
             vColor = aColor;
+            vTexCoord = aTexCoord;
         }`
     );
 
@@ -125,6 +135,10 @@ function initProgram() {
         in vec3 vEyeVector;
         flat in vec3 vColor;
 
+        // Texture information
+        uniform sampler2D uTexture;
+        in vec2 vTexCoord;
+
         // Output color of the fragment
         out vec4 fragColor;
 
@@ -146,6 +160,9 @@ function initProgram() {
             float d = length(vLightVector);
             float attenuation = 1.0 / ((lightConstantA * d * d) + (lightConstantB * d) + lightConstantC);
 
+            // Object color combined from texture and material
+            vec4 color = texture(uTexture, vTexCoord);
+
             // compute lighting
             float A = materialAmbient;
             float D = materialDiffuse * diffuse * attenuation;
@@ -162,7 +179,7 @@ function initProgram() {
     gl.useProgram(program);
     
     // Get the attribute indices.
-    const attributes = ["aPosition", "aNormal", "aColor"];
+    const attributes = ["aPosition", "aNormal", "aColor", "aTexCoord"];
     for (const a of attributes) {
         program[a] = gl.getAttribLocation(program, a);
     }
@@ -170,7 +187,7 @@ function initProgram() {
     // Get the uniform indices.
     const uniforms = [
         "uCameraMatrix", "uModelMatrix", "uProjectionMatrix",
-        "uLight", "uLightIntensity",
+        "uLight", "uLightIntensity", "uTexture",
         /*
         uLightAttenuation, uLightAmbient, uLightDiffuse, uLightSpecular,
         uMaterialAmbient, uMaterialDiffuse, uMaterialSpecular, uMaterialShininess
@@ -284,6 +301,17 @@ async function initGameWorld() {
  */
 function initEvents() {
     window.addEventListener("resize", resizeCanvas);
+    document.getElementById("scramble").addEventListener("click", () => {
+        const diff = document.getElementById("difficulty").value;
+
+        if (diff === "easy") {
+            shuffleRubiksCube(2);
+        } else if(diff === "medium") {
+            shuffleRubiksCube(5);
+        } else if (diff === "hard") {
+            shuffleRubiksCube(100);
+        }
+    });
 
     GLB.keyInput = KeyInputManager(window);
 
@@ -489,7 +517,6 @@ const ROTATE_CLOCKWISE_KEY = "Shift";
 
 const ROTATION_TIME = 300;
 
-const NUM_SHUFFLES = 20;
 const SHUFFLE_RUBIKS_CUBE_KEY = "s";
 
 const START_ROTATE = 0;
@@ -527,7 +554,7 @@ function updateRubiksCube(deltaTimeMs) {
 
     let input = getUserInputForShufflingRubiksCube(deltaTimeMs);
     if (input) {
-        shuffleRubiksCube();
+        shuffleRubiksCube(NUM_SHUFFLES);
         return;
     }
 
@@ -571,8 +598,8 @@ function getUserInputForRotatingRubiksCube(deltaTimeMs) {
     return [selectedRotation, isShiftDown];
 }
 
-function shuffleRubiksCube() {
-    for (let i = 0; i < NUM_SHUFFLES; ++i) {
+function shuffleRubiksCube(numShuffles) {
+    for (let i = 0; i < numShuffles; ++i) {
         const j = Math.floor(Math.random() * ROTATIONS.length);
         const rotation = ROTATIONS[j];
 
@@ -729,4 +756,43 @@ function getIndicesOfCubletsToRotate(axisI, axisJ, lockedAxis, lockedValue, rota
 
 function cubletPositionToIndex(pos) {
     return (pos[0] * 9) + (pos[1] * 3) + pos[2];
+}
+
+/**
+ * Load a texture onto the GPU. The second argument is the texture number, defaulting to 0.
+ */
+function loadTexture(img, index) {
+    // Default argument value
+    if (typeof index === 'undefined') { index = 0; }
+
+    let texture = gl.createTexture(); // create a texture resource on the GPU
+    gl.activeTexture(gl['TEXTURE' + index]); // set the current texture that all following commands will apply to
+    gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); // tell WebGL to flip the image vertically (almost always want this to be true)
+
+    // Load the image data into the texture
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+    // Setup options for downsampling and upsampling the image data
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // Cleanup and return
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return texture;
+}
+
+/**
+ * Initialize the texture buffers.
+ */
+function initTextures() {
+    obj.push(loadTexture(createCheckerboardImage(128, 2), 0));
+
+    let image = new Image();
+    image.src = 'moravian.png';
+    image.addEventListener('load', () => {
+        obj.push(loadTexture(image, 1));
+        render();
+    });
 }
