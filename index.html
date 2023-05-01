@@ -35,9 +35,23 @@
     </head>
     <body>
         <!-- Define the canvas to use for the WebGL example -->
-        <canvas id="webgl-canvas" width="400" height="400">
-            Your browser doesn't support the HTML5 canvas element.
-        </canvas>
+        <div>
+            <canvas id="webgl-canvas" width="400" height="400">
+                Your browser doesn't support the HTML5 canvas element.
+            </canvas>
+            <div id="info" style="position: absolute; bottom: 0px; right: 0px;">
+                <div>g = left</div>
+                <div>x = middlex</div>
+                <div>b = right</div>
+                <div>r = front</div>
+                <div>z = middlez</div>
+                <div>o = back</div>
+                <div>u = up</div>
+                <div>y = middley</div>
+                <div>d = down</div>
+                <div>key + shift = inverse</div>
+            </div>
+        </div>
         <div id=controls>
             <table>
                 <button id="scramble" type="button">Scramble!</button>

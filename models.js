@@ -46,12 +46,9 @@ function loadModel(gl, coords, indices, options) {
     colors = Float32Array.from(colors);
     loadArrayBuffer(gl, colors, gl.program.aColor, 3, gl.FLOAT);
 
-    // TODO: load texCoords into GPU.
-    // buf = gl.createBuffer();
-    // gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    // gl.bufferData(gl.ARRAY_BUFFER, tex_coords, gl.STATIC_DRAW);
-    // gl.vertexAttribPointer(gl.program.aTexCoord, 2, gl.FLOAT, false, 0, 0);
-    // gl.enableVertexAttribArray(gl.program.aTexCoord);
+    // Load texCoords into GPU.
+    const texCoords = Float32Array.from(options.texCoords);
+    loadArrayBuffer(gl, texCoords, gl.program.aTexCoord, 2, gl.FLOAT);
 
     // Load the index data into the GPU.
     indices = Uint16Array.from(indices);
@@ -117,6 +114,17 @@ function loadCubeModel(gl) {
         1, 0, 1, // purple
     ];
 
+    const texCoords = [
+        1, 1, // A
+        0, 1, // B
+        0, 0, // C
+        1, 0, // D
+        1, 1, // E
+        0, 1, // F
+        0, 0, // G
+        1, 0, // H
+    ];
+
     const indices = [
         1, 2, 0, 2, 3, 0,
         7, 6, 1, 0, 7, 1,
@@ -126,7 +134,7 @@ function loadCubeModel(gl) {
         0, 3, 7, 3, 4, 7,
     ];
 
-    return loadModel(gl, coords, indices, { colors });
+    return loadModel(gl, coords, indices, { texCoords, colors });
 }
 
 function loadModelFromWavefrontOBJ(gl, filename, options) {

@@ -14,7 +14,7 @@ import { stringToColor } from "./tools.js";
 
 import { SceneTreeNode, switchParentKeepTransform } from "./sceneTree.js";
 
-import { loadModelFromWavefrontOBJ } from "./models.js";
+import { loadModelFromWavefrontOBJ, loadCubeModel } from "./models.js";
 
 import {
     ClickAndDragHandler,
@@ -24,9 +24,6 @@ import {
 
 // Global WebGL context variable.
 let gl;
-
-// Objects to be drawn
-let obj;
 
 // For storing other globals.
 const GLB = {};
@@ -55,9 +52,6 @@ window.addEventListener("load", async function init() {
     await initGameWorld();
     initEvents();
     resizeCanvas();
-
-    // Set Texture Value
-    // gl.uniform1i(gl.program.uTexture, +document.getElementById('texture').value);
 
     GLB.lastFrameTime = null;
     GLB.rotationCountDown = 0;
@@ -91,8 +85,6 @@ function initProgram() {
         out vec3 vLightVector;
         out vec3 vEyeVector;
         flat out vec3 vColor;
-
-        // Texture information
         out vec2 vTexCoord;
 
         void main() {
@@ -138,7 +130,6 @@ function initProgram() {
         in vec3 vEyeVector;
         flat in vec3 vColor;
 
-        // Texture information
         uniform sampler2D uTexture;
         in vec2 vTexCoord;
 
@@ -164,14 +155,14 @@ function initProgram() {
             float attenuation = 1.0 / ((lightConstantA * d * d) + (lightConstantB * d) + lightConstantC);
 
             // Object color combined from texture and material
-            vec4 color = texture(uTexture, vTexCoord);
+            vec3 color = vColor * texture(uTexture, vTexCoord).xyz;
 
             // compute lighting
             float A = materialAmbient;
             float D = materialDiffuse * diffuse * attenuation;
             float S = materialSpecular * specular * attenuation;
 
-            fragColor.rgb = (((A + D) * vColor) + S) * lightColor * uLightIntensity;
+            fragColor.rgb = (((A + D) * color) + S) * lightColor * uLightIntensity;
             fragColor.a = 1.0;
         }
         `
@@ -207,6 +198,9 @@ function initProgram() {
  * Set the initial value of some uniforms.
  */
 function initUniforms() {
+    // Set Texture Value
+    gl.uniform1i(gl.program.uTexture, 0);
+    
     /*
     const convert = s => Float32Array.from(stringToColor(s));
     
@@ -275,6 +269,8 @@ async function initGameWorld() {
         centerCubletModel
     ];
 
+    const cubletTexture = await getTexture("moravian.png");
+
     // Create smaller cubes
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
@@ -286,6 +282,7 @@ async function initGameWorld() {
                     .reduce((a, b) => a + b);
                 
                 cublet.model = cubletModels[numAxesCentered];
+                cublet.texture = cubletTexture;
 
                 translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
                 // TODO: When models are complete, rotate them so they are oriented correctly.
@@ -479,11 +476,6 @@ function runFrame() {
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    //let [model.vao, model.count, model.mode, texture] = obj;
-    // Activate and bind both textures
-    gl.activeTexture(gl.TEXTURE0);
-    //gl.bindTexture(gl.TEXTURE_2D, texture);
-
     gl.uniform4fv(gl.program.uLight, [0, 0, 10, 1]);
     gl.uniform1f(gl.program.uLightIntensity, 4);
     
@@ -494,6 +486,10 @@ function render() {
             gl.uniformMatrix4fv(gl.program.uModelMatrix, false, obj.transform);
 
             const model = obj.model;
+
+            gl.activeTexture(gl.TEXTURE);
+            gl.bindTexture(gl.TEXTURE_2D, obj.texture);
+
             gl.bindVertexArray(model.vao);
             gl.drawElements(model.mode, model.count, gl.UNSIGNED_SHORT, 0);
         }
@@ -506,7 +502,7 @@ function render() {
     draw(GLB.world);
 
     // Cleanup
-    gl.activeTexture(gl.TEXTURE0);
+    gl.activeTexture(gl.TEXTURE);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.bindVertexArray(null);
 }
@@ -778,7 +774,7 @@ function cubletPositionToIndex(pos) {
  */
 function loadTexture(img) {
     let texture = gl.createTexture(); // create a texture resource on the GPU
-    gl.activeTexture(gl.TEXTURE0); // set the current texture that all following commands will apply to
+    gl.activeTexture(gl.TEXTURE); // set the current texture that all following commands will apply to
     gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
@@ -800,12 +796,14 @@ function loadTexture(img) {
 /**
  * Initialize the texture buffers.
  */
-function initTextures() {
-    let image = new Image();
-    image.src = 'moravian.png';
-    image.addEventListener('load', () => {
-        let texture = loadTexture(image);
-        obj.push(texture);
-        render();
+function getTexture(filename) {
+    return new Promise(function (resolve) {
+        const image = new Image();
+        image.src = filename;
+
+        image.addEventListener("load", () => {
+            const texture = loadTexture(image);
+            resolve(texture);
+        });
     });
 }
