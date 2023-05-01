@@ -258,7 +258,7 @@ async function initGameWorld() {
     const colors = [WHITE, RED, GREEN, YELLOW, BLUE, ORANGE, BLACK, BLACK]
         .flatMap(c => [c, c, c]).flat();
 
-    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { colors });
+    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { });
     const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "edge.obj", { colors });
     const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "corner.obj", { colors });
 
@@ -266,7 +266,14 @@ async function initGameWorld() {
         cornerCubletModel,
         edgeCubletModel, 
         centerCubletModel,
-        centerCubletModel
+        centerCubletModel,
+    ];
+
+    const cubletModelTransforms = [
+        identityMat4(),
+        identityMat4(),
+        scaleMat4(identityMat4(), 5),
+        scaleMat4(identityMat4(), 5),
     ];
 
     const cubletTexture = await getTexture("moravian.png");
@@ -284,9 +291,12 @@ async function initGameWorld() {
                 cublet.model = cubletModels[numAxesCentered];
                 cublet.texture = cubletTexture;
 
+                const modelTransform = cubletModelTransforms[numAxesCentered];
+
                 translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
                 // TODO: When models are complete, rotate them so they are oriented correctly.
                 scaleMat4(cublet.localTransform, 0.2);
+                Mat4.multiply(cublet.localTransform, cublet.localTransform, modelTransform);
 
                 cublet.originalIndex = [x, y, z];
 
@@ -487,7 +497,7 @@ function render() {
 
             const model = obj.model;
 
-            gl.activeTexture(gl.TEXTURE);
+            gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, obj.texture);
 
             gl.bindVertexArray(model.vao);
@@ -502,7 +512,7 @@ function render() {
     draw(GLB.world);
 
     // Cleanup
-    gl.activeTexture(gl.TEXTURE);
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.bindVertexArray(null);
 }
@@ -774,7 +784,7 @@ function cubletPositionToIndex(pos) {
  */
 function loadTexture(img) {
     let texture = gl.createTexture(); // create a texture resource on the GPU
-    gl.activeTexture(gl.TEXTURE); // set the current texture that all following commands will apply to
+    gl.activeTexture(gl.TEXTURE0); // set the current texture that all following commands will apply to
     gl.bindTexture(gl.TEXTURE_2D, texture); // assign our texture resource as the current texture
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
