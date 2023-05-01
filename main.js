@@ -241,7 +241,7 @@ async function initGameWorld() {
     {
         GLB.rubiksCube = SceneTreeNode("empty");
         rotateMat4(GLB.rubiksCube.localTransform, 30, [1, 0, 0]);
-        rotateMat4(GLB.rubiksCube.localTransform, 45, [0, 1, 0]);
+        rotateMat4(GLB.rubiksCube.localTransform, -45, [0, 1, 0]);
 
         GLB.childrens = SceneTreeNode("empty");
         
@@ -696,9 +696,11 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 0, rotateClockwise);
         axis = null;
     } else if (rotation === "xMiddle") {
+        rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 1, rotateClockwise);
         axis = null;
     } else if (rotation === "right") {
+        rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 2, rotateClockwise);
         axis = null;
     } else if (rotation === "front") {
@@ -708,12 +710,15 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 1, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "back") {
+        rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 0, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "up") {
+        rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 2, rotateClockwise);
         axis = [0, 0, 1];
     } else if (rotation === "yMiddle") {
+        rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 1, rotateClockwise);
         axis = [0, 0, 1];
     } else if (rotation === "down") {
