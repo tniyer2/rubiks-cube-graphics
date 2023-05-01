@@ -176,6 +176,8 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
 
     const stringsToFloats = a => a.map(s => Number(s));
 
+    console.log(lines);
+
     // Load data from each line.
     for (const tokens of lines) {
         const firstToken = tokens.shift();
