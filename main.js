@@ -1,16 +1,27 @@
-// Rubik's Cube Game
-// Authors: Bryan Cohen & Tanishq Iyer
+/*
+Rubik's Cube Game
+Authors: Bryan Cohen & Tanishq Iyer
+
+Official colors of the Rubik's Cube are used.
+Red: #BA0C2F
+Blue: #003DA5
+Yellow: #FFD700
+Orange: #FE5000
+White: #FFFFFF
+Green: #009A44
+
+Dark side of cube: #353535
+*/
+
 "use strict";
 
 import {
     Vec2, Mat4, Quat,
     identityMat4, multiplyMat4,
-    translateMat4, scaleMat4, rotateMat4,
+    translateMat4, rotateMat4,
     angleAxisToMat4,
     degreesToRadians, radiansToDegrees
 } from "./linearAlgebraUtils.js";
-
-import { stringToColor } from "./tools.js";
 
 import { SceneTreeNode, switchParentKeepTransform } from "./sceneTree.js";
 
@@ -27,8 +38,6 @@ let gl;
 
 // For storing other globals.
 const GLB = {};
-
-const NUM_SHUFFLES = 20;
 
 window.addEventListener("load", async function init() {
     // Get the canvas element.
@@ -181,11 +190,7 @@ function initProgram() {
     // Get the uniform indices.
     const uniforms = [
         "uCameraMatrix", "uModelMatrix", "uProjectionMatrix",
-        "uLight", "uLightIntensity", "uTexture",
-        /*
-        uLightAttenuation, uLightAmbient, uLightDiffuse, uLightSpecular,
-        uMaterialAmbient, uMaterialDiffuse, uMaterialSpecular, uMaterialShininess
-        */
+        "uLight", "uLightIntensity", "uTexture"
     ];
     for (const u of uniforms) {
         program[u] = gl.getUniformLocation(program, u);
@@ -200,19 +205,6 @@ function initProgram() {
 function initUniforms() {
     // Set Texture Value
     gl.uniform1i(gl.program.uTexture, 0);
-    
-    /*
-    const convert = s => Float32Array.from(stringToColor(s));
-    
-    gl.uniform3fv(gl.program.uLightAmbient, convert("#ffffff"));
-    gl.uniform3fv(gl.program.uLightDiffuse, convert("#ffffff"));
-    gl.uniform3fv(gl.program.uLightSpecular, convert("#ffffff"));
-
-    gl.uniform3fv(gl.program.uMaterialAmbient, convert("#330000"));
-    gl.uniform3fv(gl.program.uMaterialDiffuse, convert("#a00000"));
-    gl.uniform3fv(gl.program.uMaterialSpecular, convert("#606060"));
-    gl.uniform1f(gl.program.uMaterialShininess, 5);
-    */
 }
 
 /**
@@ -245,14 +237,6 @@ async function initGameWorld() {
         GLB.rubiksCube.addChild(GLB.childrens);
         GLB.rubiksCube.addChild(GLB.temp);
     }
-
-    // Official colors of the Rubik's Cube.
-    const RED = stringToColor("#BA0C2F");
-    const BLUE = stringToColor("#003DA5");
-    const YELLOW = stringToColor("#FFD700");
-    const ORANGE = stringToColor("#FE5000");
-    const WHITE = stringToColor("#FFFFFF");
-    const GREEN = stringToColor("#009A44");
 
     const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/center.obj", { });
     const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "models/edge.obj", { });
