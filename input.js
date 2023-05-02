@@ -10,6 +10,10 @@ const MOUSE_LEAVE = "mouseleave";
 const KEY_DOWN = "keydown";
 const KEY_UP = "keyup";
 
+const ON_BLUR = "blur";
+
+const COMMAND_KEY = "Meta";
+
 /**
  * Implements functionality of clicking and dragging on a DOM element.
  * elm      the DOM element to click and drag on.
@@ -184,6 +188,11 @@ function KeyInputManager(elm) {
             for (const listener of listeners) {
                 listener(value);
             }
+        },
+        reset: function () {
+            for (const key in this.state) {
+                this.setKey(key, false);
+            }
         }
     };
 
@@ -200,7 +209,19 @@ function KeyInputManager(elm) {
         e.preventDefault();
         e.stopPropagation();
 
-        obj.setKey(e.key, false);
+        if (e.key === COMMAND_KEY) {
+            // MacOS X specific hack
+            obj.reset();
+        } else {
+            obj.setKey(e.key, false);
+        }
+    });
+
+    elm.addEventListener(ON_BLUR, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        obj.reset();
     });
 
     return obj;
