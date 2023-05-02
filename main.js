@@ -337,7 +337,7 @@ async function initGameWorld() {
 function initEvents() {
     window.addEventListener("resize", resizeCanvas);
 
-    const shuffleButton = document.getElementById("scramble");
+    const shuffleButton = document.getElementById("shuffle");
     shuffleButton.addEventListener("click", onClickShuffle);
 
     GLB.keyInput = KeyInputManager(window);

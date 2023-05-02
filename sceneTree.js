@@ -2,14 +2,14 @@
 import { isNumber, makeObj } from "./type.js";
 import { Mat4, identityMat4 } from "./linearAlgebraUtils.js";
 
-let GLB_NODE_ID = 0;
+let GLB_NODE_ID_COUNT = 0;
 
 /**
  * A node in a scene tree.
  */
 function SceneTreeNode(type) {
     const obj = {
-        _id: ++GLB_NODE_ID,
+        _id: ++GLB_NODE_ID_COUNT,
         type,
         localTransform: identityMat4(),
         parent: null,
@@ -47,9 +47,6 @@ function SceneTreeNode(type) {
         child.parent = null;
     }
 
-    /**
-     * Efficiently adds and removes children so that this.children becomes updatedChildren.
-     */
     obj.setChildren = function (newChildren) {
         // Check that newChildren has no duplicates.
         {
@@ -95,13 +92,18 @@ function SceneTreeNode(type) {
     return obj;
 }
 
+/**
+ * Switches the parent of a child while maintaining the child's same
+ * position and orientation in world space.
+ * noSwich - updates the child's transform without actually switching its parent.
+ */
 function switchParentKeepTransform(child, oldParent, newParent, noSwitch) {
     noSwitch = noSwitch === true;
 
     const newTransform = Mat4.multiply(
         Mat4.create(),
         Mat4.invert(Mat4.create(), newParent.transform),
-        child.transform,
+        child.transform
     );
 
     if (!noSwitch) {
