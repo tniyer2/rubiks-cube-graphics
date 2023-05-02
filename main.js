@@ -58,13 +58,10 @@ window.addEventListener("load", async function init() {
     // Initialize the WebGL program and data.
     gl.program = initProgram();
     initUniforms();
+    initGlobals();
     await initGameWorld();
     initEvents();
     resizeCanvas();
-
-    GLB.lastFrameTime = null;
-    GLB.rotationCountDown = 0;
-    GLB.curRotation = null;
 
     // Start the Game Loop
     runFrame();
@@ -74,9 +71,7 @@ window.addEventListener("load", async function init() {
  * Initializes the WebGL program.
  */
 function initProgram() {
-    // Compile shaders.
-    // Vertex Shader
-    const vert_shader = compileShader(gl, gl.VERTEX_SHADER,
+    const vertexShader = compileShader(gl, gl.VERTEX_SHADER,
         `#version 300 es
         precision mediump float;
 
@@ -113,40 +108,37 @@ function initProgram() {
         }`
     );
 
-    // Fragment Shader
-    const frag_shader = compileShader(gl, gl.FRAGMENT_SHADER,
+    const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER,
         `#version 300 es
         precision mediump float;
 
-        // Light constants
+        // Light Constants
         const vec3 lightColor = normalize(vec3(1.0, 1.0, 1.0));
 
-        // Material constants
+        // Material Constants
         const float materialAmbient = 0.2;
-        const float materialDiffuse = 0.95;
-        const float materialSpecular = 0.05;
+        const float materialDiffuse = 0.9;
+        const float materialSpecular = 0.1;
         const float materialShininess = 5.0;
         
-        // Attenuation constants
+        // Attenuation Constants
         const float lightConstantA = 0.025;
         const float lightConstantB = 0.05;
         const float lightConstantC = 1.0;
 
         uniform float uLightIntensity;
+        uniform sampler2D uTexture;
 
         in vec3 vNormalVector;
         in vec3 vLightVector;
         in vec3 vEyeVector;
         flat in vec3 vColor;
-
-        uniform sampler2D uTexture;
         in vec2 vTexCoord;
 
-        // Output color of the fragment
+        // Output color of the fragment.
         out vec4 fragColor;
 
         void main() {
-            // normalize vectors
             vec3 N = normalize(vNormalVector);
             vec3 L = normalize(vLightVector);
             vec3 E = normalize(vEyeVector);
@@ -163,10 +155,10 @@ function initProgram() {
             float d = length(vLightVector);
             float attenuation = 1.0 / ((lightConstantA * d * d) + (lightConstantB * d) + lightConstantC);
 
-            // Object color combined from texture and material
+            // Color combined from texture and material.
             vec3 color = vColor * texture(uTexture, vTexCoord).xyz;
 
-            // compute lighting
+            // Compute Lighting
             float A = materialAmbient;
             float D = materialDiffuse * diffuse * attenuation;
             float S = materialSpecular * specular * attenuation;
@@ -178,19 +170,20 @@ function initProgram() {
     );
 
     // Link the shaders into a program and use them with the WebGL context.
-    const program = linkProgram(gl, vert_shader, frag_shader);
+    const program = linkProgram(gl, vertexShader, fragmentShader);
     gl.useProgram(program);
     
-    // Get the attribute indices.
+    // Get location of all attributes.
     const attributes = ["aPosition", "aNormal", "aColor", "aTexCoord"];
     for (const a of attributes) {
         program[a] = gl.getAttribLocation(program, a);
     }
 
-    // Get the uniform indices.
+    // Get location of all uniforms.
     const uniforms = [
         "uCameraMatrix", "uModelMatrix", "uProjectionMatrix",
-        "uLight", "uLightIntensity", "uTexture"
+        "uLight", "uLightIntensity",
+        "uTexture"
     ];
     for (const u of uniforms) {
         program[u] = gl.getUniformLocation(program, u);
@@ -199,12 +192,15 @@ function initProgram() {
     return program;
 }
 
-/**
- * Set the initial value of some uniforms.
- */
 function initUniforms() {
     // Set Texture Value
     gl.uniform1i(gl.program.uTexture, 0);
+}
+
+function initGlobals() {
+    GLB.lastFrameTime = null;
+    GLB.rotationCountDown = 0;
+    GLB.curRotation = null;
 }
 
 /**
@@ -229,18 +225,20 @@ async function initGameWorld() {
         rotateMat4(GLB.rubiksCube.localTransform, 30, [1, 0, 0]);
         rotateMat4(GLB.rubiksCube.localTransform, -45, [0, 1, 0]);
 
-        GLB.childrens = SceneTreeNode("empty");
+        // Parent of the smaller cubes in the Rubik's cube.
+        GLB.cubelets = SceneTreeNode("empty");
         
+        // Temporary parent for rotating cubelets.
         GLB.temp = SceneTreeNode("empty");
 
         GLB.world.addChild(GLB.rubiksCube);
-        GLB.rubiksCube.addChild(GLB.childrens);
+        GLB.rubiksCube.addChild(GLB.cubelets);
         GLB.rubiksCube.addChild(GLB.temp);
     }
 
-    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/center.obj", { });
-    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "models/edge.obj", { });
-    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/corner.obj", { });
+    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/corner.obj");
+    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "models/edge.obj");
+    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/center.obj");
 
     const cubletModels = [
         cornerCubletModel,
@@ -257,17 +255,17 @@ async function initGameWorld() {
     ];
 
     const cubletRotations = [
-        [180, 90, 0], [180, -90, 0],   [0, 0, 180],
-        [0, 0, 90],   [90, [0, 0, 1]], [90, 0, 90],
-        [0, 180, 0],  [90, [0, 1, 0]], [0, -90, 0],
+        [180, 90, 0], [180, -90, 0], [0, 0, 180],
+        [0, 0, 90],   [0, 0, 90],    [90, 0, 90],
+        [0, 180, 0],  [0, 90, 0],    [0, -90, 0],
 
-        [180, [0, 0, 1]], [180, [0, 0, 1]], [180, [1, 0, 0]],
-        [-90, [1, 0, 0]], null,             [90, [1, 0, 0]],
-        null,             null,             [180, [0, 1, 0]],
+        [0, 0, 180], [0, 0, 180], [180, 0, 0],
+        [-90, 0, 0], null,        [90, 0, 0],
+        null,        null,        [0, 180, 0],
 
-        [180, 0, 0],  [180, 90, 0],     [0, -90, 180],
-        [-90, 0, 90], [-90, [0, 0, 1]], [180, 0, 90],
-        [0, 90, 0],   [-90, [0, 1, 0]], null,
+        [180, 0, 0],  [180, 90, 0], [0, -90, 180],
+        [-90, 0, 90], [0, 0, -90],  [180, 0, 90],
+        [0, 90, 0],   [0, -90, 0],  null
     ];
 
     const cubletTextures = [
@@ -284,14 +282,16 @@ async function initGameWorld() {
         "corner-white-blue-orange.png", "edge-white-blue.png", "corner-white-blue-red.png",
     ];
 
+    // Load all textures.
     for (let i = 0; i < cubletTextures.length; ++i) {
-        const filename = cubletTextures[i];
+        let filename = cubletTextures[i];
         if (filename !== null) {
-            cubletTextures[i] = await getTexture("textures/" + filename);
+            filename = "textures/" + filename;
+            cubletTextures[i] = await getTexture(filename);
         }
     }
 
-    // Create smaller cubes
+    // Create cubelets.
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
             for (let z = 0; z < 3; ++z) {
@@ -299,41 +299,33 @@ async function initGameWorld() {
                     .map(axis => axis === 1 ? 1 : 0)
                     .reduce((a, b) => a + b);
                 const isCore = numAxesCentered === 3;
+                const hasModel = !isCore;
                 
                 const cubletIndex = (x * 9) + (y * 3) + z;
 
-                const cublet = SceneTreeNode("model");
+                const nodeType = isCore ? "empty" : "model";
+                const cublet = SceneTreeNode(nodeType);
 
-                if (!isCore) {
+                if (hasModel) {
                     cublet.model = cubletModels[numAxesCentered];
-                    const texture = cubletTextures[cubletIndex];
-                    if (texture !== null) {
-                        cublet.texture = texture;
-                    }
+                    cublet.texture = cubletTextures[cubletIndex];
                 }
 
                 translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.42));
 
                 const rot = cubletRotations[cubletIndex];
                 if (rot !== null) {
-                    if (rot.length === 2) {
-                        const [angle, axis] = rot;
-                        rotateMat4(cublet.localTransform, angle, axis);
-                    } else {
-                        const q = Quat.fromEuler(Quat.create(), rot[0], rot[1], rot[2]);
-                        const m = Mat4.fromQuat(Mat4.create(), q);
-                        multiplyMat4(cublet.localTransform, m);
-                    }
+                    const q = Quat.fromEuler(Quat.create(), rot[0], rot[1], rot[2]);
+                    const m = Mat4.fromQuat(Mat4.create(), q);
+                    multiplyMat4(cublet.localTransform, m);
                 }
 
-                if (!isCore) {
+                if (hasModel) {
                     const t = cubletModelTransforms[numAxesCentered];
                     multiplyMat4(cublet.localTransform, t);
                 }
 
-                cublet.originalIndex = [x, y, z];
-
-                GLB.childrens.addChild(cublet);
+                GLB.cubelets.addChild(cublet);
             }
         }
     }
@@ -344,17 +336,9 @@ async function initGameWorld() {
  */
 function initEvents() {
     window.addEventListener("resize", resizeCanvas);
-    document.getElementById("scramble").addEventListener("click", () => {
-        const diff = document.getElementById("difficulty").value;
 
-        if (diff === "easy") {
-            shuffleRubiksCube(2);
-        } else if(diff === "medium") {
-            shuffleRubiksCube(5);
-        } else if (diff === "hard") {
-            shuffleRubiksCube(100);
-        }
-    });
+    const shuffleButton = document.getElementById("scramble");
+    shuffleButton.addEventListener("click", onClickShuffle);
 
     GLB.keyInput = KeyInputManager(window);
 
@@ -383,10 +367,22 @@ function updateProjectionMatrix() {
 
     const proj = Mat4.perspective(Mat4.create(), degreesToRadians(90), w / h, 0.0001, 1000);
 
-    // orthographic for debugging
-    // const proj = mat4.ortho(mat4.create(), -2, 2, -2, 2, 1000, -1000);
-
     gl.uniformMatrix4fv(gl.program.uProjectionMatrix, false, proj);
+}
+
+function onClickShuffle() {
+    const d = document.getElementById("difficulty").value;
+
+    let numShuffles;
+    if (d === "easy") {
+        numShuffles = 2;
+    } else if (d === "medium") {
+        numShuffles = 5;
+    } else if (d === "hard") {
+        numShuffles = 30;
+    }
+
+    shuffleRubiksCube(numShuffles);
 }
 
 const ROTATE_Z_KEY = "Meta";
@@ -399,7 +395,7 @@ const STEP_SIZE = 20;
 
 /**
  * Handles rotating the Rubik's cube
- * when clicking and dragging.
+ * when clicking and dragging with the mouse.
  */
 function onMouse(e, state, self) {
     function updateTransform() {
@@ -525,7 +521,7 @@ function render() {
     gl.uniformMatrix4fv(gl.program.uCameraMatrix, false, GLB.world.camera.transform);
 
     const draw = function (obj) {
-        if (obj.type === "model" && obj.model) {
+        if (obj.type === "model") {
             gl.uniformMatrix4fv(gl.program.uModelMatrix, false, obj.transform);
 
             const model = obj.model;
@@ -551,9 +547,9 @@ function render() {
 }
 
 const ROTATIONS = [
-    "left", "xMiddle", "right",
-    "front", "zMiddle", "back",
-    "up", "yMiddle", "down"
+    "left", "x-middle", "right",
+    "front", "z-middle", "back",
+    "up", "y-middle", "down"
 ];
 
 const ROTATION_KEYS = [
@@ -564,12 +560,16 @@ const ROTATION_KEYS = [
 
 const ROTATE_CLOCKWISE_KEY = "Shift";
 
-const ROTATION_TIME = 300;
+const ROTATION_TIME_MS = 300;
 
 const START_ROTATE = 0;
 const DO_ROTATE = 1;
 const END_ROTATE = 2;
 
+/**
+ * Animates the Rubik's Cube if a current rotation is active.
+ * Otherwise checks for rotation user input.
+ */
 function updateRubiksCube(deltaTimeMs) {
     if (GLB.curRotation !== null) {
         if (GLB.timeSinceRotationStart === 0) {
@@ -581,7 +581,7 @@ function updateRubiksCube(deltaTimeMs) {
         }
 
         GLB.timeSinceRotationStart += deltaTimeMs;
-        let interpolation = GLB.timeSinceRotationStart / ROTATION_TIME;
+        let interpolation = GLB.timeSinceRotationStart / ROTATION_TIME_MS;
 
         let reset = false;
         if (interpolation > 1.0) {
@@ -606,6 +606,10 @@ function updateRubiksCube(deltaTimeMs) {
     }
 }
 
+/**
+ * Checks if any of the rotation keys have been pressed.
+ * Returns a selected rotation and true if clockwise.
+ */
 function getUserInputForRotatingRubiksCube(deltaTimeMs) {
     if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= deltaTimeMs;
     if (GLB.rotationCountDown > 0) return null;
@@ -617,16 +621,19 @@ function getUserInputForRotatingRubiksCube(deltaTimeMs) {
     // User didn't enter input for any side.
     if (i === -1) return null;
 
+    // Reset countdown to 0.2 seconds.
+    GLB.rotationCountDown = 200;
+
     const isShiftDown = GLB.keyInput.isKeyDown(ROTATE_CLOCKWISE_KEY);
 
     const selectedRotation = ROTATIONS[i];
-
-    // Reset countdown to 0.2 seconds.
-    GLB.rotationCountDown = 200;
     
     return [selectedRotation, isShiftDown];
 }
 
+/**
+ * Randomly shuffles the Rubik's cube.
+ */
 function shuffleRubiksCube(numShuffles) {
     for (let i = 0; i < numShuffles; ++i) {
         const j = Math.floor(Math.random() * ROTATIONS.length);
@@ -640,18 +647,26 @@ function shuffleRubiksCube(numShuffles) {
     }
 }
 
+/**
+ * Rotates a side of the Rubik's cube.
+ * rotation - which side to rotate.
+ * rotateClockwise - rotates clockwise if true.
+ * interpolation - value between 0 and 1 that animates rotation.
+ * rotateState - start, do (multiple), and end must be given in order.
+ */
 function rotateRubiksCubeSide(rotation, rotateClockwise, interpolation, rotateState) {
-    const [alignmentMatrix, rotationMatrix, indices, newIndices] = getRotationInfo(rotation, rotateClockwise, interpolation);
+    const [alignmentMatrix, rotationMatrix, indices, newIndices] =
+        getRotationInfo(rotation, rotateClockwise, interpolation);
 
     if (rotateState === START_ROTATE) {
-        GLB.childrensCopy = GLB.childrens.children.slice();
+        GLB.cubeletsBeforeRotation = GLB.cubelets.children.slice();
 
-        GLB.cubletsToRotate = indices.map(i => GLB.childrensCopy[i]);
+        GLB.cubletsToRotate = indices.map(i => GLB.cubeletsBeforeRotation[i]);
 
         GLB.temp.localTransform = alignmentMatrix;
 
         for (const cublet of GLB.cubletsToRotate) {
-            switchParentKeepTransform(cublet, GLB.childrens, GLB.temp);
+            switchParentKeepTransform(cublet, GLB.cubelets, GLB.temp);
         }
         return;
     }
@@ -663,36 +678,37 @@ function rotateRubiksCubeSide(rotation, rotateClockwise, interpolation, rotateSt
 
     if (rotateState === END_ROTATE) {
         for (const cublet of GLB.cubletsToRotate) {
-            switchParentKeepTransform(cublet, GLB.temp, GLB.childrens, true);
+            switchParentKeepTransform(cublet, GLB.temp, GLB.cubelets, true);
         }
 
         GLB.temp.localTransform = identityMat4();
         GLB.temp.setChildren([]);
 
-        const temp = GLB.childrensCopy.slice();
+        const newCubelets = GLB.cubeletsBeforeRotation;
+        GLB.cubeletsBeforeRotation = null;
+        const temp = newCubelets.slice();
 
         for (let i = 0; i < indices.length; ++i) {
             const curI = indices[i];
             const newI = newIndices[i];
 
-            GLB.childrensCopy[newI] = temp[curI];
+            newCubelets[newI] = temp[curI];
         }
 
-        GLB.childrens.setChildren(GLB.childrensCopy);
+        GLB.cubelets.setChildren(newCubelets);
 
-        GLB.childrensCopy = null;
         GLB.cubletsToRotate = null;
     }
 }
 
-// relative to the coordinate space not relative to the center of the cube
+// Relative to the coordinate space not relative to the center of the cube.
 const ROTATION_MAPPINGS_CLOCKWISE = [
     [2, 0], [2, 1], [2, 2],
     [1, 0], [1, 1], [1, 2],
     [0, 0], [0, 1], [0, 2]
 ];
 
-// relative to the coordinate space not relative to the center of the cube
+// Relative to the coordinate space not relative to the center of the cube.
 const ROTATION_MAPPINGS_COUNTER_CLOCKWISE = [
     [0, 2], [0, 1], [0, 0],
     [1, 2], [1, 1], [1, 0],
@@ -705,7 +721,7 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
     if (rotation === "left") {
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 0, rotateClockwise);
         axis = null;
-    } else if (rotation === "xMiddle") {
+    } else if (rotation === "x-middle") {
         rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 2, 0, 1, rotateClockwise);
         axis = null;
@@ -716,7 +732,7 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
     } else if (rotation === "front") {
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 2, rotateClockwise);
         axis = [0, 1, 0];
-    } else if (rotation === "zMiddle") {
+    } else if (rotation === "z-middle") {
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(1, 0, 2, 1, rotateClockwise);
         axis = [0, 1, 0];
     } else if (rotation === "back") {
@@ -727,7 +743,7 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
         rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 2, rotateClockwise);
         axis = [0, 0, 1];
-    } else if (rotation === "yMiddle") {
+    } else if (rotation === "y-middle") {
         rotateClockwise = !rotateClockwise;
         [indicesToRotate, newIndicesAfterRotation] = getIndicesOfCubletsToRotate(2, 0, 1, 1, rotateClockwise);
         axis = [0, 0, 1];
@@ -748,6 +764,10 @@ function getRotationInfo(rotation, rotateClockwise, interpolation) {
 }
 
 function getIndicesOfCubletsToRotate(axisI, axisJ, lockedAxis, lockedValue, rotateClockwise) {
+    function cubletPositionToIndex(pos) {
+        return (pos[0] * 9) + (pos[1] * 3) + pos[2];
+    }
+
     rotateClockwise = rotateClockwise === true;
 
     const indices = [];
@@ -779,12 +799,23 @@ function getIndicesOfCubletsToRotate(axisI, axisJ, lockedAxis, lockedValue, rota
     return [indices, newIndices];
 }
 
-function cubletPositionToIndex(pos) {
-    return (pos[0] * 9) + (pos[1] * 3) + pos[2];
+/**
+ * Loads a texture from file.
+ */
+function getTexture(filename) {
+    return new Promise(function (resolve) {
+        const image = new Image();
+        image.src = filename;
+
+        image.addEventListener("load", function () {
+            const texture = loadTexture(image);
+            resolve(texture);
+        });
+    });
 }
 
 /**
- * Load a texture onto the GPU. The second argument is the texture number, defaulting to 0.
+ * Load a texture onto the GPU.
  */
 function loadTexture(img) {
     let texture = gl.createTexture(); // create a texture resource on the GPU
@@ -805,19 +836,4 @@ function loadTexture(img) {
     // Cleanup and return
     gl.bindTexture(gl.TEXTURE_2D, null);
     return texture;
-}
-
-/**
- * Initialize the texture buffers.
- */
-function getTexture(filename) {
-    return new Promise(function (resolve) {
-        const image = new Image();
-        image.src = filename;
-
-        image.addEventListener("load", () => {
-            const texture = loadTexture(image);
-            resolve(texture);
-        });
-    });
 }
