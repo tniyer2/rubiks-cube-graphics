@@ -262,14 +262,14 @@ async function initGameWorld() {
         cornerCubletModel,
         edgeCubletModel, 
         centerCubletModel,
-        centerCubletModel,
+        null // no model for core
     ];
 
     const cubletModelTransforms = [
-        scaleMat4(identityMat4(), 5),
-        scaleMat4(identityMat4(), 5),
-        scaleMat4(identityMat4(), 5),
-        scaleMat4(identityMat4(), 5),
+        identityMat4(),
+        translateMat4(identityMat4(), [0, 0.015, -0.018]),
+        translateMat4(identityMat4(), [0, 0.12, 0]),
+        null
     ];
 
     const cubletRotations = [
@@ -311,25 +311,24 @@ async function initGameWorld() {
     for (let x = 0; x < 3; ++x) {
         for (let y = 0; y < 3; ++y) {
             for (let z = 0; z < 3; ++z) {
-                const cublet = SceneTreeNode("model");
-
                 const numAxesCentered = [x, y, z]
                     .map(axis => axis === 1 ? 1 : 0)
                     .reduce((a, b) => a + b);
+                const isCore = numAxesCentered === 3;
                 
                 const cubletIndex = (x * 9) + (y * 3) + z;
 
-                cublet.model = cubletModels[numAxesCentered];
-                const texture = cubletTextures[cubletIndex];
-                if (texture !== null) {
-                    cublet.texture = texture;
+                const cublet = SceneTreeNode("model");
+
+                if (!isCore) {
+                    cublet.model = cubletModels[numAxesCentered];
+                    const texture = cubletTextures[cubletIndex];
+                    if (texture !== null) {
+                        cublet.texture = texture;
+                    }
                 }
 
-                const modelTransform = cubletModelTransforms[numAxesCentered];
-
-                translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
-                scaleMat4(cublet.localTransform, 0.2);
-                multiplyMat4(cublet.localTransform, modelTransform);
+                translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.42));
 
                 const rot = cubletRotations[cubletIndex];
                 if (rot !== null) {
@@ -341,6 +340,11 @@ async function initGameWorld() {
                         const m = Mat4.fromQuat(Mat4.create(), q);
                         multiplyMat4(cublet.localTransform, m);
                     }
+                }
+
+                if (!isCore) {
+                    const t = cubletModelTransforms[numAxesCentered];
+                    multiplyMat4(cublet.localTransform, t);
                 }
 
                 cublet.originalIndex = [x, y, z];
@@ -537,7 +541,7 @@ function render() {
     gl.uniformMatrix4fv(gl.program.uCameraMatrix, false, GLB.world.camera.transform);
 
     const draw = function (obj) {
-        if (obj.type === "model") {
+        if (obj.type === "model" && obj.model) {
             gl.uniformMatrix4fv(gl.program.uModelMatrix, false, obj.transform);
 
             const model = obj.model;
@@ -578,8 +582,6 @@ const ROTATE_CLOCKWISE_KEY = "Shift";
 
 const ROTATION_TIME = 300;
 
-const SHUFFLE_RUBIKS_CUBE_KEY = "s";
-
 const START_ROTATE = 0;
 const DO_ROTATE = 1;
 const END_ROTATE = 2;
@@ -613,29 +615,11 @@ function updateRubiksCube(deltaTimeMs) {
         return;
     }
 
-    let input = getUserInputForShufflingRubiksCube(deltaTimeMs);
-    if (input) {
-        shuffleRubiksCube(NUM_SHUFFLES);
-        return;
-    }
-
-    input = getUserInputForRotatingRubiksCube(deltaTimeMs);
+    const input = getUserInputForRotatingRubiksCube(deltaTimeMs);
     if (input !== null) {
         GLB.curRotation = input;
         GLB.timeSinceRotationStart = 0;
     }
-}
-
-function getUserInputForShufflingRubiksCube(deltaTimeMs) {
-    if (GLB.rotationCountDown > 0) GLB.rotationCountDown -= deltaTimeMs;
-    if (GLB.rotationCountDown > 0) return false;
-
-    if (!GLB.keyInput.isKeyDown(SHUFFLE_RUBIKS_CUBE_KEY)) return false;
-
-    // Reset countdown to 0.2 seconds.
-    GLB.rotationCountDown = 200;
-
-    return true;
 }
 
 function getUserInputForRotatingRubiksCube(deltaTimeMs) {
@@ -730,15 +714,6 @@ const ROTATION_MAPPINGS_COUNTER_CLOCKWISE = [
     [1, 2], [1, 1], [1, 0],
     [2, 2], [2, 1], [2, 0]
 ];
-
-const Y_AXIS = [0, 1, 0];
-const Z_AXIS = [0, 0, 1];
-
-const ROTATION_ALIGNMENT_AXES = [
-    null, null, null,
-    Y_AXIS, Y_AXIS, Y_AXIS,
-    Z_AXIS, Z_AXIS, Z_AXIS
-]
 
 function getRotationInfo(rotation, rotateClockwise, interpolation) {
     let indicesToRotate, newIndicesAfterRotation, axis;
