@@ -9,7 +9,7 @@ import { calcNormals } from "./tools.js";
 function loadModel(gl, coords, indices, options) {
     const DEFAULTS = {
         colors: null,
-        defaultColor: [0, 1, 0], // Green
+        defaultColor: [1, 1, 1], // Green
         texCoords: null,
         normals: null,
         useStrips: false,

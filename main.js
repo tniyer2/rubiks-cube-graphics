@@ -3,7 +3,7 @@
 "use strict";
 
 import {
-    Vec2, Mat4,
+    Vec2, Mat4, Quat,
     identityMat4, multiplyMat4,
     translateMat4, scaleMat4, rotateMat4,
     angleAxisToMat4,
@@ -14,7 +14,7 @@ import { stringToColor } from "./tools.js";
 
 import { SceneTreeNode, switchParentKeepTransform } from "./sceneTree.js";
 
-import { loadModelFromWavefrontOBJ, loadCubeModel } from "./models.js";
+import { loadModelFromWavefrontOBJ } from "./models.js";
 
 import {
     ClickAndDragHandler,
@@ -258,9 +258,9 @@ async function initGameWorld() {
     const colors = [WHITE, RED, GREEN, YELLOW, BLUE, ORANGE, BLACK, BLACK]
         .flatMap(c => [c, c, c]).flat();
 
-    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "center.obj", { });
-    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "edge.obj", { colors });
-    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "corner.obj", { colors });
+    const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/center.obj", { });
+    const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "models/edge.obj", { });
+    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/corner.obj", { colors });
 
     const cubletModels = [
         cornerCubletModel,
@@ -271,12 +271,45 @@ async function initGameWorld() {
 
     const cubletModelTransforms = [
         identityMat4(),
-        identityMat4(),
+        scaleMat4(identityMat4(), 5),
         scaleMat4(identityMat4(), 5),
         scaleMat4(identityMat4(), 5),
     ];
 
-    const cubletTexture = await getTexture("moravian.png");
+    const cubletRotations = [
+        null, [180, -90, 0],   null,
+        [0, 0, 90], [90, [0, 0, 1]], [90, 0, 90],
+        null, [90, [0, 1, 0]], null,
+
+        [180, [0, 0, 1]], [180, [0, 0, 1]], [180, [1, 0, 0]],
+        [-90, [1, 0, 0]], null,             [90, [1, 0, 0]],
+        null,             null,             [180, [0, 1, 0]],
+
+        null, [180, 90, 0],        null,
+        [-90, 0, 90], [-90, [0, 0, 1]], [180, 0, 90],
+        null, [-90, [0, 1, 0]], null,
+    ];
+
+    const cubletTextures = [
+        null, "edge-yellow-green.png", null,
+        "edge-green-orange.png", "center-green.png", "edge-green-red.png",
+        null, "edge-white-green.png", null,
+
+        "edge-yellow-orange.png", "center-yellow.png", "edge-yellow-red.png",
+        "center-orange.png", null, "center-red.png",
+        "edge-white-orange.png", "center-white.png", "edge-white-red.png",
+
+        null, "edge-yellow-blue.png", null,
+        "edge-blue-orange.png", "center-blue.png", "edge-blue-red.png",
+        null, "edge-white-blue.png", null,
+    ];
+
+    for (let i = 0; i < cubletTextures.length; ++i) {
+        const filename = cubletTextures[i];
+        if (filename !== null) {
+            cubletTextures[i] = await getTexture("textures/" + filename);
+        }
+    }
 
     // Create smaller cubes
     for (let x = 0; x < 3; ++x) {
@@ -288,15 +321,31 @@ async function initGameWorld() {
                     .map(axis => axis === 1 ? 1 : 0)
                     .reduce((a, b) => a + b);
                 
+                const cubletIndex = (x * 9) + (y * 3) + z;
+
                 cublet.model = cubletModels[numAxesCentered];
-                cublet.texture = cubletTexture;
+                const texture = cubletTextures[cubletIndex];
+                if (texture !== null) {
+                    cublet.texture = texture;
+                }
 
                 const modelTransform = cubletModelTransforms[numAxesCentered];
 
                 translateMat4(cublet.localTransform, [x, y, z].map(e => (e - 1) * 0.5));
-                // TODO: When models are complete, rotate them so they are oriented correctly.
                 scaleMat4(cublet.localTransform, 0.2);
-                Mat4.multiply(cublet.localTransform, cublet.localTransform, modelTransform);
+                multiplyMat4(cublet.localTransform, modelTransform);
+
+                const rot = cubletRotations[cubletIndex];
+                if (rot !== null) {
+                    if (rot.length === 2) {
+                        const [angle, axis] = rot;
+                        rotateMat4(cublet.localTransform, angle, axis);
+                    } else {
+                        const q = Quat.fromEuler(Quat.create(), rot[0], rot[1], rot[2]);
+                        const m = Mat4.fromQuat(Mat4.create(), q);
+                        multiplyMat4(cublet.localTransform, m);
+                    }
+                }
 
                 cublet.originalIndex = [x, y, z];
 
