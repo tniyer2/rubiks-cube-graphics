@@ -253,14 +253,10 @@ async function initGameWorld() {
     const ORANGE = stringToColor("#FE5000");
     const WHITE = stringToColor("#FFFFFF");
     const GREEN = stringToColor("#009A44");
-    const BLACK = [0, 0, 0];
-
-    const colors = [WHITE, RED, GREEN, YELLOW, BLUE, ORANGE, BLACK, BLACK]
-        .flatMap(c => [c, c, c]).flat();
 
     const centerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/center.obj", { });
     const edgeCubletModel = await loadModelFromWavefrontOBJ(gl, "models/edge.obj", { });
-    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/corner.obj", { colors });
+    const cornerCubletModel = await loadModelFromWavefrontOBJ(gl, "models/corner.obj", { });
 
     const cubletModels = [
         cornerCubletModel,
@@ -270,38 +266,38 @@ async function initGameWorld() {
     ];
 
     const cubletModelTransforms = [
-        identityMat4(),
+        scaleMat4(identityMat4(), 5),
         scaleMat4(identityMat4(), 5),
         scaleMat4(identityMat4(), 5),
         scaleMat4(identityMat4(), 5),
     ];
 
     const cubletRotations = [
-        null, [180, -90, 0],   null,
-        [0, 0, 90], [90, [0, 0, 1]], [90, 0, 90],
-        null, [90, [0, 1, 0]], null,
+        [180, 90, 0], [180, -90, 0],   [0, 0, 180],
+        [0, 0, 90],   [90, [0, 0, 1]], [90, 0, 90],
+        [0, 180, 0],  [90, [0, 1, 0]], [0, -90, 0],
 
         [180, [0, 0, 1]], [180, [0, 0, 1]], [180, [1, 0, 0]],
         [-90, [1, 0, 0]], null,             [90, [1, 0, 0]],
         null,             null,             [180, [0, 1, 0]],
 
-        null, [180, 90, 0],        null,
+        [180, 0, 0],  [180, 90, 0],     [0, -90, 180],
         [-90, 0, 90], [-90, [0, 0, 1]], [180, 0, 90],
-        null, [-90, [0, 1, 0]], null,
+        [0, 90, 0],   [-90, [0, 1, 0]], null,
     ];
 
     const cubletTextures = [
-        null, "edge-yellow-green.png", null,
+        "corner-yellow-green-orange.png", "edge-yellow-green.png", "corner-yellow-green-red.png",
         "edge-green-orange.png", "center-green.png", "edge-green-red.png",
-        null, "edge-white-green.png", null,
+        "corner-white-green-orange.png", "edge-white-green.png", "corner-white-green-red.png",
 
         "edge-yellow-orange.png", "center-yellow.png", "edge-yellow-red.png",
         "center-orange.png", null, "center-red.png",
         "edge-white-orange.png", "center-white.png", "edge-white-red.png",
 
-        null, "edge-yellow-blue.png", null,
+        "corner-yellow-blue-orange.png", "edge-yellow-blue.png", "corner-yellow-blue-red.png",
         "edge-blue-orange.png", "center-blue.png", "edge-blue-red.png",
-        null, "edge-white-blue.png", null,
+        "corner-white-blue-orange.png", "edge-white-blue.png", "corner-white-blue-red.png",
     ];
 
     for (let i = 0; i < cubletTextures.length; ++i) {
