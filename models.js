@@ -4,12 +4,12 @@ import { calcNormals } from "./tools.js";
 
 /**
  * Loads a model into GPU with the coordinates and indices provided.
- * Other data can optionally passed through options.
+ * Other data can optionally be passed through options.
  */
 function loadModel(gl, coords, indices, options) {
     const DEFAULTS = {
         colors: null,
-        defaultColor: [1, 1, 1], // Green
+        defaultColor: [1, 1, 1], // White
         texCoords: null,
         normals: null,
         useStrips: false,
@@ -46,9 +46,12 @@ function loadModel(gl, coords, indices, options) {
     colors = Float32Array.from(colors);
     loadArrayBuffer(gl, colors, gl.program.aColor, 3, gl.FLOAT);
 
-    // Load texCoords into GPU.
-    const texCoords = Float32Array.from(options.texCoords);
-    loadArrayBuffer(gl, texCoords, gl.program.aTexCoord, 2, gl.FLOAT);
+    // Load texture coordinates into GPU.
+    let texCoords = options.texCoords;
+    if (texCoords !== null) {
+        texCoords = Float32Array.from(texCoords);
+        loadArrayBuffer(gl, texCoords, gl.program.aTexCoord, 2, gl.FLOAT);
+    }
 
     // Load the index data into the GPU.
     indices = Uint16Array.from(indices);
@@ -89,52 +92,6 @@ function loadArrayBuffer(gl, data, location, numComponents, componentType) {
     gl.enableVertexAttribArray(location);
 
     return buf;
-}
-
-function loadCubeModel(gl) {
-    const coords = [
-        1, 1, 1, // A
-        -1, 1, 1, // B
-        -1, -1, 1, // C
-        1, -1, 1, // D
-        1, -1, -1, // E
-        -1, -1, -1, // F
-        -1, 1, -1, // G
-        1, 1, -1, // H
-    ];
-
-    const colors = [
-        1, 0, 0, // red
-        1, 1, 0, // yellow
-        0, 1, 0, // green
-        0, 0, 0, // black (color is not actually used)
-        0, 1, 1, // cyan
-        0, 0, 1, // blue
-        0, 0, 0, // black (color is not actually used)
-        1, 0, 1, // purple
-    ];
-
-    const texCoords = [
-        1, 1, // A
-        0, 1, // B
-        0, 0, // C
-        1, 0, // D
-        1, 1, // E
-        0, 1, // F
-        0, 0, // G
-        1, 0, // H
-    ];
-
-    const indices = [
-        1, 2, 0, 2, 3, 0,
-        7, 6, 1, 0, 7, 1,
-        1, 6, 2, 6, 5, 2,
-        3, 2, 4, 2, 5, 4,
-        6, 7, 5, 7, 4, 5,
-        0, 3, 7, 3, 4, 7,
-    ];
-
-    return loadModel(gl, coords, indices, { texCoords, colors });
 }
 
 function loadModelFromWavefrontOBJ(gl, filename, options) {
@@ -212,14 +169,14 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
 
                 indices.push(i);
             }
-        } else if (firstToken === "mtllib") { // load .mtl material file
-            // TODO
-        } else if (firstToken === "usemtl") { // use material for this object
-            // TODO
-        } else if (firstToken === "o") { // ?
-            // TODO
-        } else if (firstToken === "s") { // ?
-            // TODO
+        } else if (firstToken === "mtllib") {
+            // pass
+        } else if (firstToken === "usemtl") {
+            // pass
+        } else if (firstToken === "o") {
+            // pass
+        } else if (firstToken === "s") {
+            // pass
         } else {
             throw new Error("Invalid token: " + firstToken);
         }
@@ -228,7 +185,10 @@ function _loadModelFromWavefrontOBJ(gl, text, options) {
     // Unpack vertex attributes based on the mapping.
     for (let mapping of vertexMappings) {
         mapping = mapping.split(/\//);
+        // Each index starts from 1.
         mapping = mapping.map(x => Number(x) - 1);
+
+        // Get indexes in mapping.
         const [posI, texCoordI, normalI] = mapping;
 
         concatSlice(positions, packedPositions, posI * 3, 3);
@@ -270,4 +230,4 @@ function parseText(text) {
     return lines;
 }
 
-export { loadCubeModel, loadModelFromWavefrontOBJ };
+export { loadModelFromWavefrontOBJ };
