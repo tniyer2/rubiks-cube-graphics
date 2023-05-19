@@ -1,5 +1,6 @@
 # rubiks-cube-graphics
 A 3D rubiks cube game using WebGL.
+Uses Blinn-Phong shading for lighting.
 
 ![rubiks cube](rubiks-cube.png)
 
